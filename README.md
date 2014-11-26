@@ -1,5 +1,7 @@
 # UPYUN Go SDK
 
+[![Build Status](https://travis-ci.org/upyun/go-sdk.svg?branch=master)](https://travis-ci.org/upyun/go-sdk)
+
 ### CONSTANTS
 ```
 const (
