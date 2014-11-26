@@ -1,0 +1,17 @@
+language: go
+
+go:
+  - 1.1
+  - 1.2
+  - 1.3
+  - tip
+
+install:
+  - go get github.com/upyun/go-sdk/upyun
+
+before_script:
+  - export UPYUN_BUCKET=sdkfile
+  - export UPYUN_USERNAME=tester
+  - export UPYUN_PASSWORD=grjxv2mxELR3
+script:
+  - cd tests && go test
