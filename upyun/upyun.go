@@ -37,16 +37,17 @@ type Info struct {
 	Time int64
 }
 
-func newInfo(s string) (info *Info) {
-	info = new(Info)
-
+func newInfo(s string) *Info {
 	infoList := strings.Split(s, "\t")
-	info.Name = infoList[0]
-	info.Type = infoList[1]
-	info.Size, _ = strconv.ParseInt(infoList[2], 10, 64)
-	info.Time, _ = strconv.ParseInt(infoList[3], 10, 64)
+	size, _ := strconv.ParseInt(infoList[2], 10, 64)
+	time, _ := strconv.ParseInt(infoList[3], 10, 64)
 
-	return
+	return &Info{
+		Name: infoList[0],
+		Type: infoList[1],
+		Size: size,
+		Time: time,
+	}
 }
 
 type RespError struct {
@@ -54,13 +55,11 @@ type RespError struct {
 	RequestId string
 }
 
-func newRespError(requestId string, respStatus string) (respError *RespError) {
-	respError = new(RespError)
-
-	respError.RequestId = requestId
-	respError.err = errors.New(respStatus)
-
-	return
+func newRespError(requestId string, respStatus string) *RespError {
+	return &RespError{
+		RequestId: requestId,
+		err:       errors.New(respStatus),
+	}
 }
 
 func (r *RespError) Error() string {

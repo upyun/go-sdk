@@ -1,6 +1,4 @@
-# UpYun Go SDK
-
-## GoDoc
+# UPYUN Go SDK
 
 ### CONSTANTS
 ```
@@ -27,16 +25,12 @@ type FileInfo struct {
     Size int64
 }
 
-
-
 type Info struct {
     Name string
     Type string
     Size int64
     Time int64
 }
-
-
 
 type UpYun struct {
     Bucket   string
@@ -99,6 +93,8 @@ u.SetChunkSize(DefaultMaxChunkSize)
 
 ### 设置线路
 
+***(default: v0.api.upyun.com)***
+
 > v0.api.upyun.com //自动判断最优线路
 > 
 > v1.api.upyun.com //电信线路
@@ -106,8 +102,6 @@ u.SetChunkSize(DefaultMaxChunkSize)
 > v2.api.upyun.com //联通（网通）线路
 >
 > v3.api.upyun.com //移动（铁通）线路
-
-***(default: v0.api.upyun.com)***
 
 ```
 u.SetEndpoint(Auto)
@@ -175,6 +169,3 @@ retHeaders, err := u.Put("/path/to/file", fi, false, "")
 fo, err := os.Create("foo.txt")
 err = u.Get("/path/to/file", fo)
 ```
-
-
-

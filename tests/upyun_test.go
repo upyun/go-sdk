@@ -1,7 +1,7 @@
 package upyun
 
 import (
-	"github.com/upyun"
+	"github.com/upyun/go-sdk/upyun"
 	"os"
 	"path"
 	"strings"
@@ -9,11 +9,11 @@ import (
 )
 
 var (
-	u       *upyun.UpYun
-	uFail   *upyun.UpYun
-	root    string
-	txtpath string
-	imgpath string
+	u              *upyun.UpYun
+	invalidAccount *upyun.UpYun
+	root           string
+	txtpath        string
+	imgpath        string
 )
 
 func init() {
@@ -27,7 +27,7 @@ func init() {
 	}
 
 	u = upyun.NewUpYun(BUCKET, USERNAME, PASSWD)
-	uFail = upyun.NewUpYun("bucket", "username", "passwd")
+	invalidAccount = upyun.NewUpYun("bucket", "username", "passwd")
 	root = "GoSDKTest"
 
 	err := u.Mkdir(root)
@@ -82,7 +82,7 @@ func TestUpyun(t *testing.T) {
 	testDelete(t, u)
 	// Use it the wrong way to make it fail
 
-	testAuthFail(t, uFail)
+	testAuthFail(t, invalidAccount)
 }
 
 // -----------------------------------------------------------------------------------
