@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.org/upyun/go-sdk.svg?branch=master)](https://travis-ci.org/upyun/go-sdk)
 
-### CONSTANTS
+### 常量
 ```
 const (
     Auto    = "v0.api.upyun.com"
@@ -18,7 +18,7 @@ const (
 
 ```
 
-### TYPES
+### 类型
 
 ```
 type FileInfo struct {
@@ -46,7 +46,6 @@ type UpYun struct {
 
 
 func NewUpYun(bucket, username, passwd string) *UpYun
-
 
 func (u *UpYun) Delete(key string) error
 
