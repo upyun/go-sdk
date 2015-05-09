@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/md5"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -17,6 +18,10 @@ const (
 	endpoint = "http://purge.upyun.com/purge/"
 	timeout  = 60
 )
+
+type InvalidURL struct {
+	Urls []string `json:"invalid_domain_of_url"`
+}
 
 type UpYunPurge struct {
 	httpClient *http.Client
@@ -104,7 +109,9 @@ func (u *UpYunPurge) SetTimeout(t int) {
 	}
 }
 
-func (u *UpYunPurge) RefreshURLs(urls []string) error {
+// Return list of invalid urls if there is no error.
+// A url in the list means it is not in the upyun bucket, therefore Upyun cannot refresh its content.
+func (u *UpYunPurge) RefreshURLs(urls []string) ([]string, error) {
 	method := "POST"
 
 	urlsString := strings.Join(urls, "\n")
@@ -112,21 +119,21 @@ func (u *UpYunPurge) RefreshURLs(urls []string) error {
 	body := "purge=" + urlsString
 	body, err := encodeURL(body)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	date := genRFC1123Date()
 
 	sig, err := u.makeSignature(urlsString, date)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	auth := u.makeAuth(sig)
 
 	req, err := http.NewRequest(method, endpoint, bytes.NewBufferString(body))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	req.Header.Add("Expect", "")
@@ -136,18 +143,24 @@ func (u *UpYunPurge) RefreshURLs(urls []string) error {
 
 	resp, err := u.httpClient.Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	reply, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if resp.StatusCode == 200 {
-		return nil
+		var obj InvalidURL
+		err = json.Unmarshal(reply, &obj)
+		if err != nil {
+			return nil, err
+		} else {
+			return obj.Urls, nil
+		}
 	} else {
-		return fmt.Errorf("%d: %s", resp.StatusCode, string(reply))
+		return nil, fmt.Errorf("%d: %s", resp.StatusCode, string(reply))
 	}
 }
