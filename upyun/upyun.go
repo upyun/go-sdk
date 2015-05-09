@@ -184,7 +184,7 @@ func (u *UpYun) makeContentMD5(value *os.File) (string, error) {
 		if n == 0 {
 			break
 		}
-		hasher.Write(chunk)
+		hasher.Write(chunk[0:n])
 	}
 
 	if _, err := value.Seek(0, 0); err != nil {
