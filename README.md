@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.org/upyun/go-sdk.svg?branch=master)](https://travis-ci.org/upyun/go-sdk)
 
-For UPYUN URL purge API, please check out [upyunpurge](blob/master/upyunpurge/README.md).
+For UPYUN URL purge API, please check out [upyunpurge](upyunpurge/README.md).
 
 ### 常量
 ```
