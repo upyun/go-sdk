@@ -11,7 +11,7 @@ Currently, the limit is 600 URLs per minute, and the batch size is 550.
 
 ```go
 import (
-    "github.com/luanzhu/go-sdk/upyunpurge"
+    "github.com/upyun/go-sdk/upyunpurge"
     "log"
     "fmt"
 )
