@@ -17,6 +17,9 @@ import (
 const (
 	endpoint = "http://purge.upyun.com/purge/"
 	timeout  = 60
+
+	maxRefreshedURLPerMinute = 600 - 50 // 600 is the official limit
+	sleepTimeInSeconds       = 80
 )
 
 type InvalidURL struct {
@@ -111,7 +114,7 @@ func (u *UpYunPurge) SetTimeout(t int) {
 
 // Return list of invalid urls if there is no error.
 // A url in the list means it is not in the upyun bucket, therefore Upyun cannot refresh its content.
-func (u *UpYunPurge) RefreshURLs(urls []string) ([]string, error) {
+func (u *UpYunPurge) doPurgeURLs(urls []string) ([]string, error) {
 	method := "POST"
 
 	urlsString := strings.Join(urls, "\n")
@@ -163,4 +166,42 @@ func (u *UpYunPurge) RefreshURLs(urls []string) ([]string, error) {
 	} else {
 		return nil, fmt.Errorf("%d: %s", resp.StatusCode, string(reply))
 	}
+}
+
+// Send purge request to upyun.  Because upyun limits how many URLs one can purge per minute,
+// this function will send URLs in batch if the list is larger than the limit.  It will also
+// wait 80 seconds before sending next batch.
+// Return value:
+//   invalidURLs: List of URLs that upyun cannot purge, which usually means these URLs are not
+//                in current bucket.
+//   purgedURLs:  List of URLs that requests were sent without error. Please note invalid URLs
+//                will also appear in this list.
+func (u *UpYunPurge) PurgeURLs(urls []string) (invalidURLs []string, purgedURLs []string, err error) {
+	if urls == nil || len(urls) == 0 {
+		return
+	}
+
+	// Separate urls in sub-slices so that each request does not go
+	// over upyun limit
+	urlsInGroupOfLimit := InGroupOf(urls, maxRefreshedURLPerMinute)
+	numberOfGroups := len(urlsInGroupOfLimit)
+
+	for i := 0; i < len(urlsInGroupOfLimit); i++ {
+		currentURLList := urlsInGroupOfLimit[i]
+
+		var urlsError []string
+		urlsError, err = u.doPurgeURLs(currentURLList)
+		if err != nil {
+			return
+		}
+		purgedURLs = append(purgedURLs, currentURLList...)
+		invalidURLs = append(invalidURLs, urlsError...)
+
+		// need to send another batch?
+		if i < numberOfGroups-1 {
+			time.Sleep(sleepTimeInSeconds * time.Second)
+		}
+	}
+
+	return
 }
