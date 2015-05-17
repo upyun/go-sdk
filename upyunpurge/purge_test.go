@@ -17,11 +17,12 @@ func TestUpyunPurge(t *testing.T) {
 
 	u := NewUpYunPurge(bucket, username, passwd)
 
-	invalidURLs, err := u.RefreshURLs(urls)
+	invalidURLs, purgedURLs, err := u.PurgeURLs(urls)
 
 	if err != nil {
 		t.Error(err)
 	} else {
-		fmt.Println(invalidURLs)
+		fmt.Println("invalidURLs:", invalidURLs)
+		fmt.Println("purgedURLs:", purgedURLs)
 	}
 }
