@@ -1,48 +1,151 @@
+// package upyun is used for doing lots of operations on UPYUN bucket
 package upyun
 
 import (
+	"bytes"
 	"crypto/md5"
-	"encoding/hex"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 )
+
+// Auto: Auto detect based on user's internet
+// Telecom: (ISP) China Telecom
+// Cnc:     (ISP) China Unicom
+// Ctt:     (ISP) China Tietong
 
 const (
 	Auto    = "v0.api.upyun.com"
 	Telecom = "v1.api.upyun.com"
 	Cnc     = "v2.api.upyun.com"
 	Ctt     = "v3.api.upyun.com"
+
+	PurgeEndpoint = "purge.upyun.com"
+
+	ErrUsage = 0
+
+	DefaultMinChunkSize   = 8192
+	DefaultMaxChunkSize   = 32 * 1024
+	DefaultConnectTimeout = 60
 )
 
-const (
-	DefaultMaxChunkSize = 8192
-	DefaultMinChunkSize = 1
-)
-
-var endpointList = []string{Auto, Telecom, Cnc, Ctt}
-
-type Info struct {
-	Name string
-	Type string
-	Size int64
-	Time int64
+var endpoints = []string{
+	Auto,
+	Telecom,
+	Cnc,
+	Ctt,
 }
 
-func newInfo(s string) *Info {
+func genRFCDate() string {
+	return time.Now().UTC().Format(time.RFC1123)
+}
+
+func md5Str(s string) (ret string) {
+	return fmt.Sprintf("%x", md5.Sum([]byte(s)))
+}
+
+func encodeURL(uri string) string {
+	return base64.URLEncoding.EncodeToString([]byte(uri))
+}
+
+// Because of io.Copy use a 32Kb buffer, and, it is hard coded
+// user can specify a chunksize with upyun.SetChunkSize
+func chunkedCopy(dst io.Writer, src io.Reader, chunk int) (written int64, err error) {
+	buf := make([]byte, chunk)
+
+	for {
+		nr, er := src.Read(buf)
+		if nr > 0 {
+			nw, ew := dst.Write(buf[0:nr])
+
+			if nw > 0 {
+				written += int64(nw)
+			}
+			if ew != nil {
+				err = ew
+				break
+			}
+			if nr != nw {
+				err = io.ErrShortWrite
+				break
+			}
+		}
+		if er == io.EOF {
+			break
+		}
+		if er != nil {
+			err = er
+			break
+		}
+	}
+	return
+}
+
+// Use for http connect timeout
+func timeoutDialer(timeout int) func(string, string) (net.Conn, error) {
+	return func(network, addr string) (c net.Conn, err error) {
+		c, err = net.DialTimeout(network, addr, time.Duration(timeout)*time.Second)
+		if err != nil {
+			return nil, err
+		}
+		return
+	}
+}
+
+type upYunHttpProxy struct {
+	Endpoint string
+
+	httpClient *http.Client
+}
+
+func (uhp *upYunHttpProxy) SetTimeout(t int) {
+	tranport := http.Transport{
+		Dial: timeoutDialer(t),
+	}
+
+	uhp.httpClient = &http.Client{
+		Transport: &tranport,
+	}
+}
+
+func (uhp *upYunHttpProxy) SetEndpoint(endpoint string) (string, error) {
+	for _, v := range endpoints {
+		if v == endpoint {
+			uhp.Endpoint = endpoint
+			return endpoint, nil
+		}
+	}
+
+	err := fmt.Sprintf("Valid endpoint: Auto, Telecom, Cnc, Ctt")
+	return uhp.Endpoint, errors.New(err)
+}
+
+// FileInfo when use getlist
+type Info struct {
+	Size int64
+	Time int64
+	Name string
+	Type string
+}
+
+func newInfo(s string) Info {
 	infoList := strings.Split(s, "\t")
 	size, _ := strconv.ParseInt(infoList[2], 10, 64)
 	time, _ := strconv.ParseInt(infoList[3], 10, 64)
 
-	return &Info{
+	return Info{
 		Name: infoList[0],
 		Type: infoList[1],
 		Size: size,
@@ -50,31 +153,14 @@ func newInfo(s string) *Info {
 	}
 }
 
-type RespError struct {
-	err       error
-	RequestId string
-}
-
-func newRespError(requestId string, respStatus string) *RespError {
-	return &RespError{
-		RequestId: requestId,
-		err:       errors.New(respStatus),
-	}
-}
-
-func (r *RespError) Error() string {
-	return r.err.Error()
-}
-
+// FileInfo when HEAD file
 type FileInfo struct {
 	Type string
 	Date string
 	Size int64
 }
 
-func newFileInfo(s string) (fileInfo *FileInfo) {
-	fileInfo = new(FileInfo)
-
+func newFileInfo(s string) (fileInfo FileInfo) {
 	headers := strings.Split(s, "\n")
 	for _, h := range headers {
 		if h == "" {
@@ -96,7 +182,115 @@ func newFileInfo(s string) (fileInfo *FileInfo) {
 	return
 }
 
+// Request Error
+type ReqError struct {
+	err       error
+	RequestId string
+}
+
+func newRespError(requestId string, respStatus string) *ReqError {
+	return &ReqError{
+		RequestId: requestId,
+		err:       errors.New(respStatus),
+	}
+}
+
+func (r *ReqError) Error() string {
+	return r.err.Error()
+}
+
+type UpYunForm struct {
+	upYunHttpProxy
+
+	httpClient *http.Client
+
+	Key      string
+	Bucket   string
+	Endpoint string
+}
+
+// API
+
+// UPYUN HTTP FORM API
+
+func NewUpYunForm(bucket, key string) *UpYunForm {
+	client := &http.Client{
+		Transport: &http.Transport{
+			Dial: timeoutDialer(DefaultConnectTimeout),
+		},
+	}
+
+	return &UpYunForm{
+		Key:        key,
+		Bucket:     bucket,
+		Endpoint:   Auto,
+		httpClient: client,
+	}
+}
+
+func (uf *UpYunForm) SetTimeout(timeout int) {
+	uf.httpClient = &http.Client{
+		Transport: &http.Transport{
+			Dial: timeoutDialer(timeout),
+		},
+	}
+}
+
+func (uf *UpYunForm) Put(saveas, path string, expireAfter int64,
+	options map[string]string) error {
+	options["bucket"] = uf.Bucket
+	options["save-key"] = saveas
+	options["expiration"] = strconv.FormatInt(time.Now().Unix()+expireAfter, 10)
+
+	fmt.Println(options["expiration"])
+
+	args, err := json.Marshal(options)
+	if err != nil {
+		return err
+	}
+
+	policy := base64.StdEncoding.EncodeToString(args)
+	sig := md5Str(policy + "&" + uf.Key)
+
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+
+	defer file.Close()
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	writer.WriteField("policy", policy)
+	writer.WriteField("signature", sig)
+	part, err := writer.CreateFormFile("file", filepath.Base(path))
+	if err != nil {
+		return err
+	}
+
+	_, err = io.Copy(part, file)
+	if err != nil {
+		return err
+	}
+
+	writer.Close()
+
+	url := fmt.Sprintf("http://%s/%s", uf.Endpoint, uf.Bucket)
+	resp, err := http.Post(url, writer.FormDataContentType(), body)
+
+	if err != nil {
+		return err
+	}
+
+	buf, err := ioutil.ReadAll(resp.Body)
+
+	return errors.New(string(buf))
+}
+
 type UpYun struct {
+	upYunHttpProxy
+
 	httpClient *http.Client
 
 	Bucket   string
@@ -108,44 +302,14 @@ type UpYun struct {
 	ChunkSize int
 }
 
-func stringMD5(s string) (string, error) {
-	hasher := md5.New()
-	if _, err := hasher.Write([]byte(s)); err != nil {
-		return "", err
-	}
-
-	return hex.EncodeToString(hasher.Sum(nil)), nil
-}
-
-func genRFC1123Date() string { return time.Now().UTC().Format(time.RFC1123) }
-
-func encodeURL(uri string) (string, error) {
-	Url, err := url.Parse(uri)
-	if err != nil {
-		return "", err
-	}
-
-	return Url.String(), nil
-}
-
-func timeoutDialer(timeout int) func(string, string) (net.Conn, error) {
-	return func(network, addr string) (c net.Conn, err error) {
-		c, err = net.DialTimeout(network, addr, time.Duration(timeout)*time.Second)
-		if err != nil {
-			return nil, err
-		}
-		return c, err
-	}
-}
-
 func NewUpYun(bucket, username, passwd string) *UpYun {
 	u := new(UpYun)
 	u.Bucket = bucket
 	u.Username = username
 	u.Passwd = passwd
 
-	u.Timeout = 60
-	u.ChunkSize = 8192
+	u.Timeout = DefaultConnectTimeout
+	u.ChunkSize = DefaultMinChunkSize
 	u.Endpoint = Auto
 
 	u.httpClient = &http.Client{}
@@ -154,86 +318,35 @@ func NewUpYun(bucket, username, passwd string) *UpYun {
 	return u
 }
 
-func (u *UpYun) makeSignature(method, uri, date, contentLen_str string) (string, error) {
-	passwdMD5, err := stringMD5(u.Passwd)
-	if err != nil {
-		return "", err
-	}
+func (u *UpYun) makeRestAuth(method, uri, date, lengthStr string) string {
+	sign := []string{method, uri, date, lengthStr, md5Str(u.Passwd)}
 
-	signature := []string{method, uri, date, contentLen_str, passwdMD5}
-	signatureMD5, err := stringMD5(strings.Join(signature, "&"))
-	if err != nil {
-		return "", err
-	}
-
-	return signatureMD5, nil
+	return "UpYun " + u.Username + ":" + md5Str(strings.Join(sign, "&"))
 }
 
-func (u *UpYun) makeAuth(sig string) string { return "UpYun " + u.Username + ":" + sig }
+func (u *UpYun) makePurgeAuth(purgeList, date string) string {
+	sign := []string{purgeList, u.Bucket, date, md5Str(u.Passwd)}
 
-func (u *UpYun) makeContentMD5(value *os.File) (string, error) {
-	hasher := md5.New()
-	chunk := make([]byte, u.ChunkSize)
-	for {
-		n, err := value.Read(chunk)
-
-		if err != nil && err != io.EOF {
-			return "", err
-		}
-
-		if n == 0 {
-			break
-		}
-		hasher.Write(chunk[0:n])
-	}
-
-	if _, err := value.Seek(0, 0); err != nil {
-		return "", err
-	}
-
-	return hex.EncodeToString(hasher.Sum(nil)), nil
-}
-
-func (u *UpYun) Version() string { return "0.1.0" }
-
-func (u *UpYun) SetTimeout(t int) {
-	tranport := http.Transport{
-		Dial: timeoutDialer(t),
-	}
-
-	u.httpClient = &http.Client{
-		Transport: &tranport,
-	}
-}
-
-func (u *UpYun) SetEndpoint(endpoint string) (string, error) {
-	for _, v := range endpointList {
-		if v == endpoint {
-			u.Endpoint = endpoint
-			return endpoint, nil
-		}
-	}
-
-	return u.Endpoint, errors.New("Invalid endpoint")
+	return "UpYun " + u.Bucket + ":" + u.Username + ":" + md5Str(strings.Join(sign, "&"))
 }
 
 func (u *UpYun) SetChunkSize(chunksize int) (int, error) {
-	if chunksize <= DefaultMaxChunkSize && chunksize > DefaultMinChunkSize {
+	if chunksize <= DefaultMaxChunkSize && chunksize >= DefaultMinChunkSize {
 		u.ChunkSize = chunksize
 		return chunksize, nil
 	}
 
-	return u.ChunkSize, errors.New("Invalid chunksize")
+	err := fmt.Sprintf("chunksize should between %d - %d", DefaultMinChunkSize, DefaultMaxChunkSize)
+	return u.ChunkSize, errors.New(err)
 }
 
 func (u *UpYun) Usage() (int64, error) {
-	content, err := u.doHttpRequest("GET", "/", nil, "?usage", nil)
-
+	result, err := u.doRestRequest("GET", "/?usage", nil, nil)
 	if err != nil {
-		return -1, err
+		return ErrUsage, err
 	}
 
-	return strconv.ParseInt(content, 10, 64)
+	return strconv.ParseInt(result, 10, 64)
 }
 
 func (u *UpYun) Mkdir(key string) error {
@@ -242,71 +355,103 @@ func (u *UpYun) Mkdir(key string) error {
 	headers["mkdir"] = "true"
 	headers["folder"] = "true"
 
-	_, err := u.doHttpRequest("POST", key, nil, "", headers)
+	_, err := u.doRestRequest("POST", key, headers, nil)
 
 	return err
 }
 
-func (u *UpYun) Put(key string, value *os.File, md5 bool, secret string) (string, error) {
+// secret not working now
+func (u *UpYun) Put(key string, value io.Reader, useMD5 bool, secret string) (string, error) {
 	headers := make(map[string]string)
 	headers["mkdir"] = "true"
 
-	fi, err := value.Stat()
-	if err != nil {
-		return "", err
-	}
-
-	headers["Content-Length"] = strconv.FormatInt(fi.Size(), 10)
+	// secret
 
 	if secret != "" {
 		headers["Content-Secret"] = secret
 	}
 
-	if md5 {
-		contentMD5, err := u.makeContentMD5(value)
+	// Get Content length
+
+	/// if is file
+
+	switch v := value.(type) {
+	case *os.File:
+		if useMD5 {
+			hash := md5.New()
+
+			_, err := chunkedCopy(hash, value, u.ChunkSize)
+			if err != nil {
+				return "", err
+			}
+
+			headers["Content-MD5"] = fmt.Sprintf("%x", hash.Sum(nil))
+
+			// seek to origin of file
+			_, err = v.Seek(0, 0)
+			if err != nil {
+				return "", err
+			}
+		}
+
+		fileInfo, err := v.Stat()
 		if err != nil {
 			return "", err
 		}
 
-		headers["Content-MD5"] = contentMD5
+		headers["Content-Length"] = strconv.FormatInt(fileInfo.Size(), 10)
+
+		return u.doRestRequest("PUT", key, headers, value)
+	case io.Reader:
+		buf, err := ioutil.ReadAll(v)
+		if err != nil {
+			return "", err
+		}
+
+		headers["Content-Length"] = strconv.Itoa(len(buf))
+
+		if useMD5 {
+			headers["Content-MD5"] = fmt.Sprintf("%x", md5.Sum(buf))
+		}
+
+		return u.doRestRequest("PUT", key, headers, bytes.NewReader(buf))
 	}
 
-	rtHeaders, err := u.doHttpRequest("PUT", key, value, "", headers)
-
-	return rtHeaders, err
+	return "", errors.New("Invalid Reader")
 }
 
-func (u *UpYun) Get(key string, value *os.File) error {
-	_, err := u.doHttpRequest("GET", key, value, "", nil)
+func (u *UpYun) Get(key string, value interface{}) error {
+	_, err := u.doRestRequest("GET", key, nil, value)
 
 	return err
 }
 
 func (u *UpYun) Delete(key string) error {
-	_, err := u.doHttpRequest("DELETE", key, nil, "", nil)
+	_, err := u.doRestRequest("DELETE", key, nil, nil)
 
 	return err
 }
 
 func (u *UpYun) GetList(key string) ([]Info, error) {
-	ret, err := u.doHttpRequest("GET", key, nil, "", nil)
+	ret, err := u.doRestRequest("GET", key, nil, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	list := strings.Split(ret, "\n")
-	infoList := make([]Info, len(list))
+	infos := make([]Info, len(list))
+
 	for i, v := range list {
-		infoList[i] = *newInfo(v)
+		infos[i] = newInfo(v)
 	}
 
-	return infoList, nil
+	return infos, nil
 }
 
-func (u *UpYun) GetInfo(key string) (*FileInfo, error) {
-	ret, err := u.doHttpRequest("HEAD", key, nil, "", nil)
+func (u *UpYun) GetInfo(key string) (FileInfo, error) {
+	ret, err := u.doRestRequest("HEAD", key, nil, nil)
 	if err != nil {
-		return nil, err
+		return FileInfo{}, err
 	}
 
 	fileInfo := newFileInfo(ret)
@@ -314,97 +459,94 @@ func (u *UpYun) GetInfo(key string) (*FileInfo, error) {
 	return fileInfo, nil
 }
 
-func (u *UpYun) doHttpRequest(method, uri string, value *os.File,
-	args string, headers map[string]string) (string, error) {
-	var _uri string
+func (u *UpYun) Purge(urls []string) (string, error) {
+	purge := fmt.Sprintf("http://%s/purge/", PurgeEndpoint)
 
-	if uri[:1] != "/" {
-		_uri = "/" + u.Bucket + "/" + uri
-	} else {
-		_uri = "/" + u.Bucket + uri
-	}
+	date := genRFCDate()
+	purgeList := strings.Join(urls, "\n")
 
-	if args != "" {
-		_uri = _uri + args
-	}
-	_uri, err := encodeURL(_uri)
-	if err != nil {
-		return "", err
-	}
+	headers := make(map[string]string)
+	headers["Date"] = date
+	headers["Authorization"] = u.makePurgeAuth(purgeList, date)
+	headers["Content-Type"] = "application/x-www-form-urlencoded;charset=utf-8"
 
-	url := fmt.Sprintf("http://%s%s", u.Endpoint, _uri)
-	date := genRFC1123Date()
+	form := make(url.Values)
+	form.Add("purge", purgeList)
 
-	contentLen_str := headers["Content-Length"]
-
-	if contentLen_str == "" {
-		contentLen_str = "0"
-	}
-
-	contentLen_int, err := strconv.ParseInt(contentLen_str, 0, 64)
-	if err != nil {
-		return "", err
-	}
-
-	sig, err := u.makeSignature(method, _uri, date, contentLen_str)
-	if err != nil {
-		return "", err
-	}
-
-	auth := u.makeAuth(sig)
-
-	req, err := http.NewRequest(method, url, nil)
-
-	if err != nil {
-		return "", err
-	}
-
-	if method == "PUT" {
-		req.Body = value
-		req.ContentLength = contentLen_int
-	}
-
-	for k, v := range headers {
-		req.Header.Add(k, v)
-	}
-	req.Header.Add("Date", date)
-	req.Header.Add("Authorization", auth)
-
-	resp, err := u.httpClient.Do(req)
-
-	if err != nil {
-		return "", err
-	}
-
+	body := strings.NewReader(form.Encode())
+	resp, err := u.doHttpRequest("POST", purge, headers, body)
 	defer resp.Body.Close()
 
-	var requestId string
-	requestIds, ok := resp.Header[http.CanonicalHeaderKey("X-Request-Id")]
+	content, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	if resp.StatusCode/100 == 2 {
+		result := make(map[string][]string)
+		json.Unmarshal(content, result)
+
+		return strings.Join(result["invalid_domain_of_url"], ","), nil
+	}
+
+	return string(content), nil
+}
+
+func (u *UpYun) doRestRequest(method, uri string, headers map[string]string,
+	value interface{}) (result string, err error) {
+	if headers == nil {
+		headers = make(map[string]string)
+	}
+
+	// Normalize url
+	if !strings.HasPrefix(uri, "/") {
+		uri = "/" + uri
+	}
+
+	uri = "/" + u.Bucket + uri
+
+	url := fmt.Sprintf("http://%s%s", u.Endpoint, uri)
+
+	// date
+	date := genRFCDate()
+
+	// auth
+	lengthStr, ok := headers["Content-Length"]
 	if !ok {
-		requestId = "Unknown"
-	} else {
+		lengthStr = "0"
+	}
+
+	headers["Date"] = date
+	headers["Authorization"] = u.makeRestAuth(method, uri, date, lengthStr)
+
+	// Get method
+	rc, ok := value.(io.Reader)
+	if !ok {
+		rc = nil
+	}
+
+	resp, err := u.doHttpRequest(method, url, headers, rc)
+	if err != nil {
+		return "", err
+	}
+
+	if _, ok := value.(io.Closer); ok {
+		defer resp.Body.Close()
+	}
+
+	// retrive request id
+	requestId := "Unknown"
+
+	requestIds, ok := resp.Header[http.CanonicalHeaderKey("X-Request-Id")]
+	if ok {
 		requestId = strings.Join(requestIds, ",")
 	}
 
 	if (resp.StatusCode / 100) == 2 {
 		if method == "GET" && value != nil {
-			var written int64 = 0
-			chunk := make([]byte, u.ChunkSize)
+			written, err := chunkedCopy(value.(io.Writer), resp.Body, u.ChunkSize)
 
-			for {
-				n, err := resp.Body.Read(chunk)
-				if err != nil && err != io.EOF {
-					return "", err
-				}
-
-				if n == 0 {
-					break
-				}
-
-				value.Write(chunk[:n])
-				written += int64(n)
-			}
-			return "", nil
+			return strconv.FormatInt(written, 10), err
 		} else if method == "GET" && value == nil {
 			body, err := ioutil.ReadAll(resp.Body)
 			return string(body[:]), err
@@ -422,4 +564,24 @@ func (u *UpYun) doHttpRequest(method, uri string, value *os.File,
 	}
 
 	return "", newRespError(requestId, resp.Status)
+}
+
+func (u *UpYun) doHttpRequest(method, url string, headers map[string]string,
+	body io.Reader) (resp *http.Response, err error) {
+	req, err := http.NewRequest(method, url, body)
+	if err != nil {
+		return nil, err
+	}
+
+	for k, v := range headers {
+		req.Header.Add(k, v)
+	}
+
+	// https://code.google.com/p/go/issues/detail?id=6738
+	if method == "PUT" || method == "POST" {
+		length := req.Header.Get("Content-Length")
+		req.ContentLength, _ = strconv.ParseInt(length, 10, 64)
+	}
+
+	return u.httpClient.Do(req)
 }
