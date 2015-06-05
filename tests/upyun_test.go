@@ -1,6 +1,7 @@
 package upyun
 
 import (
+	"fmt"
 	"github.com/upyun/go-sdk/upyun"
 	"os"
 	"path"
@@ -17,7 +18,6 @@ var (
 )
 
 func init() {
-	//BUCKETTYPE := os.Getenv("UPYUN_BUCKET_TYPE")
 	BUCKET := os.Getenv("UPYUN_BUCKET")
 	USERNAME := os.Getenv("UPYUN_USERNAME")
 	PASSWD := os.Getenv("UPYUN_PASSWORD")
@@ -91,6 +91,8 @@ func testUsage(t *testing.T, client *upyun.UpYun) {
 	used, err := client.Usage()
 	assert(err == nil, "Usage: Get usage error", t)
 	assert(used > 0, "Usage: smaller than zero", t)
+
+	fmt.Println(used)
 }
 
 func testGetList(t *testing.T, client *upyun.UpYun) {

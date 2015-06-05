@@ -1,4 +1,5 @@
-// package upyun is used for doing lots of operations on UPYUN bucket
+// package upyun is used for your UPYUN bucket
+// this sdk implement purge api, form api, http rest api
 package upyun
 
 import (
@@ -21,11 +22,13 @@ import (
 	"time"
 )
 
-// Auto: Auto detect based on user's internet
+// Auto: Auto detected, based on user's internet
 // Telecom: (ISP) China Telecom
 // Cnc:     (ISP) China Unicom
 // Ctt:     (ISP) China Tietong
-
+// PurgeEndpoint: endpoint used for purging
+// Default(Min/Max)ChunkSize: set the buffer size when doing copy operation
+// DefaultConnectTimeout: connection timeout when connect to upyun endpoint
 const (
 	Auto    = "v0.api.upyun.com"
 	Telecom = "v1.api.upyun.com"
@@ -34,36 +37,38 @@ const (
 
 	PurgeEndpoint = "purge.upyun.com"
 
-	ErrUsage = 0
-
-	DefaultMinChunkSize   = 8192
-	DefaultMaxChunkSize   = 32 * 1024
+	DefaultChunkSize      = 32 * 1024
 	DefaultConnectTimeout = 60
 )
 
-var endpoints = []string{
-	Auto,
-	Telecom,
-	Cnc,
-	Ctt,
-}
+var (
+	chunkSize = DefaultChunkSize
+	ENDPOINTS = [...]string{
+		Auto, Telecom, Cnc, Ctt,
+	}
+)
 
-func genRFCDate() string {
+// Util functions
+
+// Greenwich Mean Time
+func genRFC1123Date() string {
 	return time.Now().UTC().Format(time.RFC1123)
 }
 
+// make md5 from string
 func md5Str(s string) (ret string) {
 	return fmt.Sprintf("%x", md5.Sum([]byte(s)))
 }
 
+// URL encode
 func encodeURL(uri string) string {
 	return base64.URLEncoding.EncodeToString([]byte(uri))
 }
 
 // Because of io.Copy use a 32Kb buffer, and, it is hard coded
 // user can specify a chunksize with upyun.SetChunkSize
-func chunkedCopy(dst io.Writer, src io.Reader, chunk int) (written int64, err error) {
-	buf := make([]byte, chunk)
+func chunkedCopy(dst io.Writer, src io.Reader) (written int64, err error) {
+	buf := make([]byte, chunkSize)
 
 	for {
 		nr, er := src.Read(buf)
@@ -93,7 +98,7 @@ func chunkedCopy(dst io.Writer, src io.Reader, chunk int) (written int64, err er
 	return
 }
 
-// Use for http connect timeout
+// Use for http connection timeout
 func timeoutDialer(timeout int) func(string, string) (net.Conn, error) {
 	return func(network, addr string) (c net.Conn, err error) {
 		c, err = net.DialTimeout(network, addr, time.Duration(timeout)*time.Second)
@@ -104,24 +109,26 @@ func timeoutDialer(timeout int) func(string, string) (net.Conn, error) {
 	}
 }
 
+func SetChunkSize(chunksize int) {
+	chunkSize = chunksize
+}
+
 type upYunHttpProxy struct {
 	Endpoint string
 
 	httpClient *http.Client
 }
 
-func (uhp *upYunHttpProxy) SetTimeout(t int) {
-	tranport := http.Transport{
-		Dial: timeoutDialer(t),
-	}
-
+func (uhp *upYunHttpProxy) SetTimeout(timeout int) {
 	uhp.httpClient = &http.Client{
-		Transport: &tranport,
+		Transport: &http.Transport{
+			Dial: timeoutDialer(timeout),
+		},
 	}
 }
 
 func (uhp *upYunHttpProxy) SetEndpoint(endpoint string) (string, error) {
-	for _, v := range endpoints {
+	for _, v := range ENDPOINTS {
 		if v == endpoint {
 			uhp.Endpoint = endpoint
 			return endpoint, nil
@@ -199,6 +206,7 @@ func (r *ReqError) Error() string {
 	return r.err.Error()
 }
 
+// UPYUN HTTP FORM API
 type UpYunForm struct {
 	upYunHttpProxy
 
@@ -208,10 +216,6 @@ type UpYunForm struct {
 	Bucket   string
 	Endpoint string
 }
-
-// API
-
-// UPYUN HTTP FORM API
 
 func NewUpYunForm(bucket, key string) *UpYunForm {
 	client := &http.Client{
@@ -228,21 +232,11 @@ func NewUpYunForm(bucket, key string) *UpYunForm {
 	}
 }
 
-func (uf *UpYunForm) SetTimeout(timeout int) {
-	uf.httpClient = &http.Client{
-		Transport: &http.Transport{
-			Dial: timeoutDialer(timeout),
-		},
-	}
-}
-
 func (uf *UpYunForm) Put(saveas, path string, expireAfter int64,
 	options map[string]string) error {
 	options["bucket"] = uf.Bucket
 	options["save-key"] = saveas
 	options["expiration"] = strconv.FormatInt(time.Now().Unix()+expireAfter, 10)
-
-	fmt.Println(options["expiration"])
 
 	args, err := json.Marshal(options)
 	if err != nil {
@@ -269,7 +263,7 @@ func (uf *UpYunForm) Put(saveas, path string, expireAfter int64,
 		return err
 	}
 
-	_, err = io.Copy(part, file)
+	_, err = chunkedCopy(part, file)
 	if err != nil {
 		return err
 	}
@@ -278,12 +272,14 @@ func (uf *UpYunForm) Put(saveas, path string, expireAfter int64,
 
 	url := fmt.Sprintf("http://%s/%s", uf.Endpoint, uf.Bucket)
 	resp, err := http.Post(url, writer.FormDataContentType(), body)
-
 	if err != nil {
 		return err
 	}
 
 	buf, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
 
 	return errors.New(string(buf))
 }
@@ -309,7 +305,6 @@ func NewUpYun(bucket, username, passwd string) *UpYun {
 	u.Passwd = passwd
 
 	u.Timeout = DefaultConnectTimeout
-	u.ChunkSize = DefaultMinChunkSize
 	u.Endpoint = Auto
 
 	u.httpClient = &http.Client{}
@@ -330,20 +325,10 @@ func (u *UpYun) makePurgeAuth(purgeList, date string) string {
 	return "UpYun " + u.Bucket + ":" + u.Username + ":" + md5Str(strings.Join(sign, "&"))
 }
 
-func (u *UpYun) SetChunkSize(chunksize int) (int, error) {
-	if chunksize <= DefaultMaxChunkSize && chunksize >= DefaultMinChunkSize {
-		u.ChunkSize = chunksize
-		return chunksize, nil
-	}
-
-	err := fmt.Sprintf("chunksize should between %d - %d", DefaultMinChunkSize, DefaultMaxChunkSize)
-	return u.ChunkSize, errors.New(err)
-}
-
 func (u *UpYun) Usage() (int64, error) {
 	result, err := u.doRestRequest("GET", "/?usage", nil, nil)
 	if err != nil {
-		return ErrUsage, err
+		return 0, err
 	}
 
 	return strconv.ParseInt(result, 10, 64)
@@ -360,7 +345,6 @@ func (u *UpYun) Mkdir(key string) error {
 	return err
 }
 
-// secret not working now
 func (u *UpYun) Put(key string, value io.Reader, useMD5 bool, secret string) (string, error) {
 	headers := make(map[string]string)
 	headers["mkdir"] = "true"
@@ -380,7 +364,7 @@ func (u *UpYun) Put(key string, value io.Reader, useMD5 bool, secret string) (st
 		if useMD5 {
 			hash := md5.New()
 
-			_, err := chunkedCopy(hash, value, u.ChunkSize)
+			_, err := chunkedCopy(hash, value)
 			if err != nil {
 				return "", err
 			}
@@ -462,7 +446,7 @@ func (u *UpYun) GetInfo(key string) (FileInfo, error) {
 func (u *UpYun) Purge(urls []string) (string, error) {
 	purge := fmt.Sprintf("http://%s/purge/", PurgeEndpoint)
 
-	date := genRFCDate()
+	date := genRFC1123Date()
 	purgeList := strings.Join(urls, "\n")
 
 	headers := make(map[string]string)
@@ -508,7 +492,7 @@ func (u *UpYun) doRestRequest(method, uri string, headers map[string]string,
 	url := fmt.Sprintf("http://%s%s", u.Endpoint, uri)
 
 	// date
-	date := genRFCDate()
+	date := genRFC1123Date()
 
 	// auth
 	lengthStr, ok := headers["Content-Length"]
@@ -544,7 +528,7 @@ func (u *UpYun) doRestRequest(method, uri string, headers map[string]string,
 
 	if (resp.StatusCode / 100) == 2 {
 		if method == "GET" && value != nil {
-			written, err := chunkedCopy(value.(io.Writer), resp.Body, u.ChunkSize)
+			written, err := chunkedCopy(value.(io.Writer), resp.Body)
 
 			return strconv.FormatInt(written, 10), err
 		} else if method == "GET" && value == nil {
