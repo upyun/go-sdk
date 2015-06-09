@@ -2,7 +2,6 @@ package upyun
 
 import (
 	"fmt"
-	"github.com/upyun/go-sdk/upyun"
 	"os"
 	"path"
 	"strings"
@@ -10,11 +9,16 @@ import (
 )
 
 var (
-	u              *upyun.UpYun
-	invalidAccount *upyun.UpYun
+	u              *UpYun
+	invalidAccount *UpYun
 	root           string
 	txtpath        string
 	imgpath        string
+)
+
+const (
+	TXTPATH = "../tests/test.txt"
+	IMGPATH = "../tests/test.png"
 )
 
 func init() {
@@ -26,8 +30,8 @@ func init() {
 		panic("Incomplete file bucket infomation in environment variable")
 	}
 
-	u = upyun.NewUpYun(BUCKET, USERNAME, PASSWD)
-	invalidAccount = upyun.NewUpYun("bucket", "username", "passwd")
+	u = NewUpYun(BUCKET, USERNAME, PASSWD)
+	invalidAccount = NewUpYun("bucket", "username", "passwd")
 	root = "GoSDKTest"
 
 	err := u.Mkdir(root)
@@ -36,7 +40,7 @@ func init() {
 	}
 
 	// Upload test.txt to root dir
-	txtfi, err := os.Open("test.txt")
+	txtfi, err := os.Open(TXTPATH)
 	if err != nil {
 		panic(err)
 	}
@@ -50,7 +54,7 @@ func init() {
 	txtfi.Close()
 
 	// Upload text.png to root dir
-	imgfi, err := os.Open("test.png")
+	imgfi, err := os.Open(IMGPATH)
 	if err != nil {
 		panic(err)
 	}
@@ -62,6 +66,7 @@ func init() {
 	}
 
 	imgfi.Close()
+
 }
 
 func assert(condition bool, log string, t *testing.T) {
@@ -87,7 +92,7 @@ func TestUpyun(t *testing.T) {
 
 // -----------------------------------------------------------------------------------
 
-func testUsage(t *testing.T, client *upyun.UpYun) {
+func testUsage(t *testing.T, client *UpYun) {
 	used, err := client.Usage()
 	assert(err == nil, "Usage: Get usage error", t)
 	assert(used > 0, "Usage: smaller than zero", t)
@@ -95,7 +100,7 @@ func testUsage(t *testing.T, client *upyun.UpYun) {
 	fmt.Println(used)
 }
 
-func testGetList(t *testing.T, client *upyun.UpYun) {
+func testGetList(t *testing.T, client *UpYun) {
 	infoList, err := client.GetList(root)
 	assert(err == nil, "Get list error", t)
 
@@ -107,7 +112,7 @@ func testGetList(t *testing.T, client *upyun.UpYun) {
 	}
 }
 
-func testGetInfo(t *testing.T, client *upyun.UpYun) {
+func testGetInfo(t *testing.T, client *UpYun) {
 	fileInfo, err := client.GetInfo(txtpath)
 
 	assert(err == nil, "GetInfo error", t)
@@ -115,13 +120,13 @@ func testGetInfo(t *testing.T, client *upyun.UpYun) {
 	assert(fileInfo.Size == 10, "GetInfo: wrong size", t)
 }
 
-func testMkdir(t *testing.T, client *upyun.UpYun) {
+func testMkdir(t *testing.T, client *UpYun) {
 	fileInfo, err := client.GetInfo(root)
 	assert(err == nil, "Mkdir: dir not exist", t)
 	assert(fileInfo.Type == "folder", "Mkdir: wrong dir type", t)
 }
 
-func testGetFile(t *testing.T, client *upyun.UpYun) {
+func testGetFile(t *testing.T, client *UpYun) {
 	txtfo, err := os.Create("get.txt")
 	if err != nil {
 		panic(err)
@@ -159,13 +164,13 @@ func testGetFile(t *testing.T, client *upyun.UpYun) {
 	assert(stat.Size() == 13001, "Get: get img size error", t)
 }
 
-func testPutFile(t *testing.T, client *upyun.UpYun) {
+func testPutFile(t *testing.T, client *UpYun) {
 	txtinfo, err := client.GetInfo(txtpath)
 	assert(err == nil, "Put: put txt error", t)
 	assert(txtinfo.Size == 10, "Put: put txt size error", t)
 	assert(txtinfo.Type == "file", "Put: put txt type error", t)
 
-	imgfi, err := os.Open("test.png")
+	imgfi, err := os.Open(IMGPATH)
 	if err != nil {
 		panic(err)
 	}
@@ -178,7 +183,7 @@ func testPutFile(t *testing.T, client *upyun.UpYun) {
 	assert(imginfo.Type == "file", "Put: put img type error", t)
 }
 
-func testDelete(t *testing.T, client *upyun.UpYun) {
+func testDelete(t *testing.T, client *UpYun) {
 	err := client.Delete(txtpath)
 	assert(err == nil, "Delete: delete txt error", t)
 
@@ -191,7 +196,7 @@ func testDelete(t *testing.T, client *upyun.UpYun) {
 
 // -----------------------------------------------------------------------------------
 
-func testAuthFail(t *testing.T, client *upyun.UpYun) {
+func testAuthFail(t *testing.T, client *UpYun) {
 	if _, err := client.Usage(); err != nil {
 		assert(strings.Contains(err.Error(), "401 Unauthorized"), "testAuthFail error", t)
 	}

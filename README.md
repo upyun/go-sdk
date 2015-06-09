@@ -2,171 +2,325 @@
 
 [![Build Status](https://travis-ci.org/upyun/go-sdk.svg?branch=master)](https://travis-ci.org/upyun/go-sdk)
 
-### 常量
-```
-const (
-    Auto    = "v0.api.upyun.com"
-    Telecom = "v1.api.upyun.com"
-    Cnc     = "v2.api.upyun.com"
-    Ctt     = "v3.api.upyun.com"
-)
+UPYUN Go SDK make it easy to use UPYUN API!
 
-const (
-    DefaultMaxChunkSize = 8192
-    DefaultMinChunkSize = 1
-)
+### Example
 
 ```
+u := upyun.NewUpYun("bucket", "username", "password")
 
-### 类型
+// Get bucket usage
+usage, err := u.Usage()
 
-```
-type FileInfo struct {
-    Type string
-    Date string
-    Size int64
-}
+// Make dir
+err := u.Mkdir("/foo/bar")
 
-type Info struct {
-    Name string
-    Type string
-    Size int64
-    Time int64
-}
+// Delete
+err := u.Delete("/foo/bar1.txt")
 
-type UpYun struct {
-    Bucket   string
-    Username string
-    Passwd   string
-    Endpoint string
+// Get dir info list
+info, err := u.GetList("/foo")
 
-    Timeout   int
-    ChunkSize int
-}
+// Download
+// io.Writer
+buf := &bytes.Buffer{}
+err := u.Get("/foo/bar2.txt", buf)
+// os.File
+file, err := os.Open("./abc.txt")
+err := u.Get("/foo/bar3.txt", file)
 
+// Upload
+// os.File
+file, err := os.Open("./abc.txt")
+u.Put("/foo/bar2.txt", file, false, "")
+// io.Reader
+buf := &bytes.Buffer{}
+_, err := io.Copy(buf, file)
+u.Put("/foo/bar2.txt", buf, false, "")
 
-func NewUpYun(bucket, username, passwd string) *UpYun
+// Purge
+resp, err := u.Purge([]string{"/foo/bar.txt", "/foo/bar1.txt"})
 
-func (u *UpYun) Delete(key string) error
-
-func (u *UpYun) Get(key string, value *os.File) error
-
-func (u *UpYun) GetInfo(key string) (*FileInfo, error)
-
-func (u *UpYun) GetList(key string) ([]Info, error)
-
-func (u *UpYun) Mkdir(key string) error
-
-func (u *UpYun) Put(key string, value *os.File, md5 bool, secret string) (string, error)
-
-func (u *UpYun) SetChunkSize(chunksize int) (int, error)
-
-func (u *UpYun) SetEndpoint(endpoint string) (string, error)
-
-func (u *UpYun) SetTimeout(t int)
-
-func (u *UpYun) Usage() (int64, error)
-
-func (u *UpYun) Version() string
-
+// Form API
+uf := upyun.NewUpYunForm("bucket", "form_api_key")
+uf.Put("/foo/bar.txt", "./abc.txt", 100, nil)
 ```
 
-## 初始化
+### Installation
 
 ```
-u := upyun.NewUpYun("bucket", "username", "passwd")
-
+go install github.com/upyun/go-sdk/upyun
 ```
 
-## 版本
+### Set chunk size
+(Default: 32kb)
+
+Chunk size is a size of a buffer which user use it to do copy operation, Golang's io.Copy have it hard coded at 32kb. This may not good for some cases,  you can change it with anysize.
+
+**Example**
 
 ```
-u.Version()
-
+var chunksize int = 1024
+upyun.SetChunkSize(chunksize)
 ```
 
-## 设置
+### Set Endpoints
+(Default: Auto)
 
-### 设置上传下载分块大小
-```
-u.SetChunkSize(DefaultMaxChunkSize)
-```
+1. `Auto`: Auto detect by user network
+2. `Telecom`: (ISP) China Telecom
+3. `Cnc`: (ISP) China Unicom
+4. `Ctt`: (ISP) China Tietong
 
-### 设置线路
-
-***(default: v0.api.upyun.com)***
-
-> v0.api.upyun.com //自动判断最优线路
-> 
-> v1.api.upyun.com //电信线路
->
-> v2.api.upyun.com //联通（网通）线路
->
-> v3.api.upyun.com //移动（铁通）线路
+**Example**
 
 ```
-u.SetEndpoint(Auto)
+u := upyun.NewUpYun("bucket", "username", "password")
+u.SetEndpoint(upyun.Auto)
+
+uf := upyun.NewUpYunForm("bucket", "form_api_key")
+uf.SetEndpoint(upyun.Auto)
 ```
-### 设置连接api超时时间
-***(default: 60s)***
+
+### Set Connect Timeout
+(Default: 60)
+
+Set the connection timeout when connect to endpoint
+
+**Example**
 
 ```
+u := upyun.NewUpYun("bucket", "username", "password")
 u.SetTimeout(30)
+
+uf := upyun.NewUpYunForm("bucket", "form_api_key")
+uf.SetTimeout(30)
 ```
-## API
+
+## HTTP REST API
+
+### New
+
+```func NewUpYun(bucket, username, passwd string) *UpYun```
+
+Create a UpYun instance with your bucket infomation(bucketname, username, password), using this instance, you can upload, download, get file info, etc.
+
+Try to reuse one instance will make it faster!
+
+**Example**
+
+```
+u := upyun.NewUpYun("bucket", "username", "password")
+```
 
 ### Usage
 
-```
-used, err := u.Usage()
-```
+```func (u *UpYun) Usage() (int64, error)```
 
-返回已使用的空间的量
+Get the usage of a bucket, if bucket infomation incorrect or err's not nil, it will return zero, otherwise, it return how many storage have been used by this bucket.
+
+**Example**
+
+```
+u := upyun.NewUpYun("bucket", "username", "password")
+usage, err := u.Usage()
+if err != nil {
+	fmt.Println(err)
+} else {
+	fmt.Println(usage)
+}
+```
 
 ### Mkdir
 
-```
-err := u.Mkdir("/path/to/dir")
-```
+```func (u *UpYun) Mkdir(key string) error```
 
-### GetInfo
-```
-fileInfo, err := u.GetInfo("/path/to/file/or/dir")
-```
+As it means, it will create a directory **recursively**.
 
-### GetList
+**Example**
+
 ```
-infoList, err := u.GetList("/path/to/dir")
+remote_dir := "/foo/bar/foo"
+
+u := upyun.NewUpYun("bucket", "username", "password")
+err := u.Mkdir(remote_dir)
+if err != nil {
+	fmt.Println(err)
+} else {
+	fmt.Println("Successful make directory " + remote_dir)
+}
+
 ```
 
 ### Delete
-```
-err := u.Delete("/path/to/file/or/dir")
-```
-***删除目录的时候，目录必须为空***
 
-### Get, Put
-**目前只支持文件的上传和下载**
+```func (u *UpYun) Delete(key string) error```
 
-上传
+Delete a file or an **empty** directory.
+
+**Example**
 
 ```
-func (u *UpYun) Put(key string, value *os.File, md5 bool, secret string) (string, error)
-```
-* md5表示是否需要md的校验，需要填入`true`，不需要填入`false`
-* secret表示是否需要加密，若设置该值，则无法直接访问原图，需要在原图URL的基础上加上密钥值才能访问，若不设置，置为`""`
+u := upyun.NewUpYun("bucket", "username", "password")
 
-> 注： 设置 Content-Secret 密钥后，原图将被保护，不能被直接访问，只有缩略图是允许被直接访问的 设置密钥后，若需访问原图，需要在 URL 后加上「缩略图间隔符号」和「访问密钥」（如： 当缩略图间隔符为 !，访问密钥为 secret，那么，原图访问方式即为： http://bucket.b0.upaiyun.com/sample.jpg!secret）
-
-```
-fi, err := os.Open("foo.txt")
-retHeaders, err := u.Put("/path/to/file", fi, false, "")
+u.Delete("/foo")
 ```
 
-下载
+### GetList
 
+```func (u *UpYun) GetList(key string) ([]Info, error)```
+
+Get a list of file information of the specified directory.
+
+**Example**
 
 ```
-fo, err := os.Create("foo.txt")
-err = u.Get("/path/to/file", fo)
+u := upyun.NewUpYun("bucket", "username", "password")
+
+list, err := u.GetList("/foo")
+if err != nil {
+	fmt.Println(err)
+} else {
+	for _, fi := range list {
+		fmt.Println(fi)
+	}
+}
 ```
+
+### GetInfo
+
+```func (u *UpYun) GetInfo(key string) (FileInfo, error)```
+
+Get file information of the specified file.
+
+**Example**
+
+```
+u := upyun.NewUpYun("bucket", "username", "password")
+
+info, err := u.GetInfo("/foo/bar1.txt")
+if err != nil {
+	fmt.Println(err)
+} else {
+	fmt.Println(info)
+}
+```
+
+
+### Put
+
+```func (u *UpYun) Put(key string, value io.Reader, md5 bool, secret string) (string, error)```
+
+Upload io.Reader to remote file.
+
+* `key`: remote file path
+* `value`: a io.Reader where data is stored
+* `md5`: set md5 to `true` to enable remote server's md5 chunksum, otherwise(`false`) not.
+* `secret`: encrypt picture, with specified this argument, origin picture is no longer available, you should add `!secret` after origin picture's URL, like this, http://bucket.b0.upaiyun.com/sample.jpg!secret(origin picture is http://bucket.b0.upaiyun.com/sample.jpg). **Zero value of string("") means no encrypt.**
+
+**Example**
+
+```
+u := upyun.NewUpYun("bucket", "username", "password")
+file, err := os.Open("./abc.txt")
+
+// resp will have some response headers which include origin picture's args if upload picture.
+resp, err := u.Put("/foo/bar.txt", file, false, "")
+if err != nil {
+	fmt.Println(err)
+} else {
+	fmt.Println(resp)
+}
+```
+
+
+
+### Get
+
+```func (u *UpYun) Get(key string, value io.Writer) error```
+
+Download remote file to a io.Writer
+
+* `key`: remote file path
+* `value`: a io.Writer use to store data
+
+**Example**
+
+```
+u := upyun.NewUpYun("bucket", "username", "password")
+
+buf := &bytes.Buffer{}
+err := u.Get("/foo/bar.txt", buf)
+if err != nil {
+	fmt.Println(err)
+}
+```
+
+
+
+### Purge
+
+```func (u *UpYun) Purge(urls []string) (string, error)```
+
+Purge files cache.
+
+When Purge successfully, return with invalid urls and nil.
+
+otherwise, return "" and error.
+
+**Example**
+
+```
+u := upyun.NewUpYun("bucket", "username", "password")
+
+invalidURL, err := u.Purge([]string{"http://bucket.b0.upaiyun.com/sample.jpg", "http://bucket.b0.upaiyun.com/sample1.jpg"})
+if err != nil {
+	fmt.Println(err)
+} else {
+	fmt.Println(invalidURL)
+}
+```
+
+## HTTP FORM API
+
+### New
+
+```func NewUpYunForm(bucket, key string) *UpYunForm```
+
+Create a instance of form api, the reason why separate it and REST API is the auth is different.
+
+**Example**
+
+```
+uf := upyun.NewUpYunForm("chengzi", "your_bucket_form_key")
+```
+
+### Put
+
+```func (uf *UpYunForm) Put(saveas, path string, expireAfter int64, options map[string]string) error```
+
+Upload a file to remote path
+
+* `saveas`: remote file path
+* `path`: local file path
+* `expireAfter`: request will expire after this time
+* `options`: nil if nothing have to specified, otherwise look up [here](http://docs.upyun.com/api/form_api/#api_1).
+
+**Example**
+
+```
+uf := upyun.NewUpYunForm("chengzi", "your_bucket_form_key")
+
+err := uf.Put("/foo/bar1.txt", "./abc.txt", 100, nil)
+if err != nil {
+	fmt.Println(err)
+}
+```
+
+## Contributor
+
+Thanks for these guys' contribution!
+
+* [luanzhu](https://github.com/luanzhu)
+
+* [Wine93](https://github.com/Wine93)
