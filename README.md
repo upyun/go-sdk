@@ -163,7 +163,7 @@ Delete a file or an **empty** directory.
 ```
 u := upyun.NewUpYun("bucket", "username", "password")
 
-u.Delete("/foo")
+err := u.Delete("/foo")
 ```
 
 ### GetList
@@ -216,7 +216,7 @@ Upload io.Reader to remote file.
 * `key`: remote file path
 * `value`: a io.Reader where data is stored
 * `md5`: set md5 to `true` to enable remote server's md5 chunksum, otherwise(`false`) not.
-* `secret`: encrypt picture, with specified this argument, origin picture is no longer available, you should add `!secret` after origin picture's URL, like this, http://bucket.b0.upaiyun.com/sample.jpg!secret(origin picture is http://bucket.b0.upaiyun.com/sample.jpg). **Zero value of string("") means no encrypt.**
+* `secret`: encrypt picture, with specified this argument, origin picture is no longer available, you should add `!secret` after origin picture's URL, like this, http://bucket.b0.upaiyun.com/sample.jpg!secret (origin picture is http://bucket.b0.upaiyun.com/sample.jpg). **Zero value of string("") means no encrypt.**
 
 **Example**
 

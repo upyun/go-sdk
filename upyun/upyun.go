@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	Version = "1.0.0"
+	Version = "1.1.0"
 )
 
 // Auto: Auto detected, based on user's internet
@@ -583,7 +583,7 @@ func (u *UpYun) doHttpRequest(method, url string, headers map[string]string,
 	}
 
 	// User Agent
-	req.Header.Add("User-Agent", makeUserAgent())
+	req.Header.Set("User-Agent", makeUserAgent())
 
 	// https://code.google.com/p/go/issues/detail?id=6738
 	if method == "PUT" || method == "POST" {
