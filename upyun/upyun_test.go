@@ -14,6 +14,7 @@ var (
 	root           string
 	txtpath        string
 	imgpath        string
+	bufpath        string
 )
 
 const (
@@ -67,6 +68,14 @@ func init() {
 
 	imgfi.Close()
 
+	// Upload string to root dir
+	buf := strings.NewReader("12345")
+	bufpath = path.Join(root, "buf")
+	_, err = u.Put(bufpath, buf, false, "")
+	if err != nil {
+		panic(err)
+	}
+
 }
 
 func assert(condition bool, log string, t *testing.T) {
@@ -80,11 +89,13 @@ func TestUpyun(t *testing.T) {
 
 	testUsage(t, u)
 	testGetList(t, u)
+	testLoopList(t, u)
 	testGetInfo(t, u)
 	testMkdir(t, u)
 	testGetFile(t, u)
 	testPutFile(t, u)
 	testDelete(t, u)
+
 	// Use it the wrong way to make it fail
 
 	testAuthFail(t, invalidAccount)
@@ -112,12 +123,31 @@ func testGetList(t *testing.T, client *UpYun) {
 	}
 }
 
+func testLoopList(t *testing.T, client *UpYun) {
+	var err error
+	iter := ""
+	count := 0
+	for {
+		_, iter, err = client.LoopList(root, iter, 1)
+		assert(err == nil, "LoopList error", t)
+		count++
+		if iter == "" {
+			break
+		}
+	}
+	assert(count > 1, "LoopList error: not list all", t)
+}
+
 func testGetInfo(t *testing.T, client *UpYun) {
 	fileInfo, err := client.GetInfo(txtpath)
-
 	assert(err == nil, "GetInfo error", t)
 	assert(fileInfo.Type == "file", "GetInfo: wrong type", t)
 	assert(fileInfo.Size == 10, "GetInfo: wrong size", t)
+
+	fileInfo, err = client.GetInfo(bufpath)
+	assert(err == nil, "GetInfo error", t)
+	assert(fileInfo.Type == "file", "GetInfo: wrong type", t)
+	assert(fileInfo.Size == 5, "GetInfo: wrong size", t)
 }
 
 func testMkdir(t *testing.T, client *UpYun) {
@@ -181,6 +211,7 @@ func testPutFile(t *testing.T, client *UpYun) {
 	assert(err == nil, "Put: put img error", t)
 	assert(imginfo.Size == 13001, "Put: put img size error", t)
 	assert(imginfo.Type == "file", "Put: put img type error", t)
+
 }
 
 func testDelete(t *testing.T, client *UpYun) {
@@ -190,7 +221,11 @@ func testDelete(t *testing.T, client *UpYun) {
 	err = client.Delete(imgpath)
 	assert(err == nil, "Delete: delete img error", t)
 
+	err = client.Delete(bufpath)
+	assert(err == nil, "Delete: delete buf error", t)
+
 	err = client.Delete(root)
+	fmt.Println(err)
 	assert(err == nil, "Delete: delete folder error", t)
 }
 
