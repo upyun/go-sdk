@@ -11,10 +11,10 @@ import (
 	"strings"
 )
 
-//UPYUN MEDIA API
+// UPYUN MEDIA API
+
 type UpYunMedia struct {
-	// Core
-	upYunHTTPCore
+	upYunHTTPCore // HTTP Core
 
 	username string
 	passwd   string
@@ -57,6 +57,12 @@ func (upm *UpYunMedia) makeMediaAuth(kwargs map[string]string) string {
 		md5Str(upm.username+auth+upm.passwd))
 }
 
+// Send Media Tasks Reqeust
+//   args:
+//     - bucket: upyun bucket name
+//     - src: media file source path in upyun
+//     - notify: notify url
+//     - tasks: tasks data,  base64 string
 func (upm *UpYunMedia) PostTasks(bucket, src, notify,
 	tasks string) ([]string, http.Header, error) {
 
@@ -93,6 +99,7 @@ func (upm *UpYunMedia) PostTasks(bucket, src, notify,
 	return nil, rtHeaders, errors.New(string(buf))
 }
 
+// Get Task Progress
 func (upm *UpYunMedia) GetProgress(bucket,
 	task_ids string) (string, http.Header, error) {
 

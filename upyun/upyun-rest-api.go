@@ -72,12 +72,16 @@ func (u *UpYun) Mkdir(key string) error {
 	return err
 }
 
-func (u *UpYun) Put(key string, value io.Reader, useMD5 bool, secret string) (http.Header, error) {
+func (u *UpYun) Put(key string, value io.Reader, useMD5 bool, secret, contentType string) (http.Header, error) {
 	headers := make(map[string]string)
 	headers["mkdir"] = "true"
 
-	// secret
+	// Content-Type
+	if contentType != "" {
+		headers["Content-Type"] = contentType
+	}
 
+	// secret
 	if secret != "" {
 		headers["Content-Secret"] = secret
 	}
@@ -85,7 +89,6 @@ func (u *UpYun) Put(key string, value io.Reader, useMD5 bool, secret string) (ht
 	// Get Content length
 
 	/// if is file
-
 	switch v := value.(type) {
 	case *os.File:
 		if useMD5 {

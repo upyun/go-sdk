@@ -5,6 +5,7 @@ package upyun
 import (
 	"crypto/md5"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -193,4 +194,14 @@ func newRespError(requestId string, respStatus string) *ReqError {
 
 func (r *ReqError) Error() string {
 	return r.err.Error()
+}
+
+func md5sum(fd io.Reader) (string, int64, error) {
+	var result []byte
+	hash := md5.New()
+	if written, err := io.Copy(hash, fd); err != nil {
+		return "", written, err
+	} else {
+		return hex.EncodeToString(hash.Sum(result)), written, nil
+	}
 }

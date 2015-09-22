@@ -16,6 +16,7 @@ import (
 )
 
 // UPYUN HTTP FORM API
+
 type UpYunForm struct {
 	// Core
 	upYunHTTPCore
@@ -69,8 +70,6 @@ func (uf *UpYunForm) Put(saveas, path string, expireAfter int64,
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
-	defer writer.Close()
-
 	writer.WriteField("policy", policy)
 	writer.WriteField("signature", sig)
 	part, err := writer.CreateFormFile("file", filepath.Base(path))
@@ -81,6 +80,8 @@ func (uf *UpYunForm) Put(saveas, path string, expireAfter int64,
 	if _, err = chunkedCopy(part, file); err != nil {
 		return nil, err
 	}
+
+	writer.Close()
 
 	url := fmt.Sprintf("http://%s/%s", uf.endpoint, uf.Bucket)
 	req, err := http.NewRequest("POST", url, body)
