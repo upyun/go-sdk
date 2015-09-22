@@ -83,7 +83,7 @@ func filterHeaders(headers http.Header) http.Header {
 func parseHeaders(headers http.Header) string {
 	result := ""
 	for k, v := range headers {
-		result += fmt.Sprintf("%s:%s\n", k, v[0])
+		result += fmt.Sprintf("%s:%s;", k, v[0])
 	}
 	return result
 }

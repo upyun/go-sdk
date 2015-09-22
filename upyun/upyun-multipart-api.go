@@ -233,7 +233,7 @@ func (ump *UpYunMultiPart) Put(key, fpath string,
 
 	rdata, err := ump.InitUpload(key, fd, expire, options)
 	if err != nil {
-		return rdata, err
+		return rdata, errors.New("failed to init upload." + err.Error())
 	}
 	var ub UploadBody
 	if err := json.Unmarshal(rdata, &ub); err != nil {
@@ -263,9 +263,14 @@ func (ump *UpYunMultiPart) Put(key, fpath string,
 		}
 
 		if try == 3 {
-			return data, err
+			return data, errors.New("failed to upload block." + err.Error())
 		}
 	}
 
-	return ump.MergeBlock(saveToken, secret, expire)
+	data, err := ump.MergeBlock(saveToken, secret, expire)
+	if err != nil {
+		return data, errors.New("failed to merge blocks." + err.Error())
+	}
+
+	return data, nil
 }
