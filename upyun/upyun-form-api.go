@@ -1,28 +1,35 @@
 package upyun
 
 import (
-	"bytes"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
-	"mime/multipart"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"time"
 )
 
 // UPYUN HTTP FORM API
-
 type UpYunForm struct {
 	// Core
 	upYunHTTPCore
 
 	Key    string
 	Bucket string
+}
+
+type FormAPIResp struct {
+	Code      int    `json:"code"`
+	Msg       string `json:"message"`
+	Url       string `json:"url"`
+	Timestamp int64  `json:"time"`
+	ImgWidth  int    `json:"image-width"`
+	ImgHeight int    `json:"image-height"`
+	ImgFrames int    `json:"image-frames"`
+	ImgType   string `json:"image-type"`
+	Sign      string `json:"sign"`
 }
 
 func NewUpYunForm(bucket, key string) *UpYunForm {
@@ -43,7 +50,7 @@ func NewUpYunForm(bucket, key string) *UpYunForm {
 }
 
 func (uf *UpYunForm) Put(saveas, path string, expireAfter int64,
-	options map[string]string) (http.Header, error) {
+	options map[string]string) (*FormAPIResp, error) {
 	if options == nil {
 		options = make(map[string]string)
 	}
@@ -67,43 +74,22 @@ func (uf *UpYunForm) Put(saveas, path string, expireAfter int64,
 
 	defer file.Close()
 
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-
-	writer.WriteField("policy", policy)
-	writer.WriteField("signature", sig)
-	part, err := writer.CreateFormFile("file", filepath.Base(path))
-	if err != nil {
-		return nil, err
-	}
-
-	if _, err = chunkedCopy(part, file); err != nil {
-		return nil, err
-	}
-
-	writer.Close()
-
 	url := fmt.Sprintf("http://%s/%s", uf.endpoint, uf.Bucket)
-	req, err := http.NewRequest("POST", url, body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-	req.Header.Set("User-Agent", makeUserAgent())
-
-	resp, err := uf.httpClient.Do(req)
+	resp, err := uf.doFormRequest(url, policy, sig, path, file)
 	if err != nil {
 		return nil, err
 	}
 
 	defer resp.Body.Close()
 
-	rtHeaders := filterHeaders(resp.Header)
 	buf, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return rtHeaders, err
+	if resp.StatusCode/100 == 2 {
+		var formResp FormAPIResp
+		if err := json.Unmarshal(buf, &formResp); err != nil {
+			return nil, err
+		}
+		return &formResp, nil
 	}
 
-	return rtHeaders, errors.New(string(buf))
+	return nil, newRespError(string(buf), resp.Header)
 }

@@ -1,7 +1,6 @@
 package upyun
 
 import (
-	//	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,12 +11,16 @@ import (
 )
 
 // UPYUN MEDIA API
-
 type UpYunMedia struct {
 	upYunHTTPCore // HTTP Core
 
 	username string
 	passwd   string
+}
+
+// status response
+type MediaStatusResp struct {
+	Tasks map[string]interface{} `json:"tasks"`
 }
 
 func NewUpYunMedia(user, pass string) *UpYunMedia {
@@ -58,50 +61,47 @@ func (upm *UpYunMedia) makeMediaAuth(kwargs map[string]string) string {
 }
 
 // Send Media Tasks Reqeust
-//   args:
-//     - bucket: upyun bucket name
-//     - src: media file source path in upyun
-//     - notify: notify url
-//     - tasks: tasks data,  base64 string
-func (upm *UpYunMedia) PostTasks(bucket, src, notify,
-	tasks string) ([]string, http.Header, error) {
+func (upm *UpYunMedia) PostTasks(bucket, src, notify string,
+	tasks []map[string]interface{}) ([]string, error) {
+	data, err := json.Marshal(tasks)
+	if err != nil {
+		return nil, err
+	}
 
 	kwargs := map[string]string{
 		"bucket_name": bucket,
 		"source":      src,
 		"notify_url":  notify,
-		"tasks":       tasks,
+		"tasks":       base64Str(data),
 	}
 
 	resp, err := upm.doMediaRequest("POST", "/pretreatment", kwargs)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	defer resp.Body.Close()
 
-	fmt.Println(resp.Header)
-	rtHeaders := filterHeaders(resp.Header)
 	buf, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, rtHeaders, err
+		return nil, err
 	}
 
 	if resp.StatusCode/2 == 100 {
 		var ids []string
 		err = json.Unmarshal(buf, &ids)
 		if err != nil {
-			return nil, rtHeaders, err
+			return nil, err
 		}
-		return ids, rtHeaders, err
+		return ids, err
 	}
 
-	return nil, rtHeaders, errors.New(string(buf))
+	return nil, newRespError(string(buf), resp.Header)
 }
 
 // Get Task Progress
 func (upm *UpYunMedia) GetProgress(bucket,
-	task_ids string) (string, http.Header, error) {
+	task_ids string) (*MediaStatusResp, error) {
 
 	kwargs := map[string]string{
 		"bucket_name": bucket,
@@ -110,18 +110,21 @@ func (upm *UpYunMedia) GetProgress(bucket,
 
 	resp, err := upm.doMediaRequest("GET", "/status", kwargs)
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 
 	defer resp.Body.Close()
 
-	rtHeaders := filterHeaders(resp.Header)
 	buf, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return "", rtHeaders, err
+	if resp.StatusCode/2 == 100 {
+		var status MediaStatusResp
+		if err := json.Unmarshal(buf, &status); err != nil {
+			return nil, err
+		}
+		return &status, nil
 	}
 
-	return string(buf), rtHeaders, err
+	return nil, newRespError(string(buf), resp.Header)
 }
 
 func (upm *UpYunMedia) doMediaRequest(method, path string,
@@ -148,11 +151,11 @@ func (upm *UpYunMedia) doMediaRequest(method, path string,
 
 	if method == "GET" {
 		url = url + "?" + payload
-		return upm.doHttpRequest(method, url, headers, nil)
+		return upm.doHTTPRequest(method, url, headers, nil)
 	} else {
 		if method == "POST" {
 			headers["Content-Length"] = fmt.Sprint(len(payload))
-			return upm.doHttpRequest(method, url, headers,
+			return upm.doHTTPRequest(method, url, headers,
 				strings.NewReader(payload))
 		}
 	}

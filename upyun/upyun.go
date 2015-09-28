@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	Version = "1.1.0"
+	Version = "1.2.0"
 )
 
 // Auto: Auto detected, based on user's internet
@@ -64,28 +64,24 @@ func md5Str(s string) (ret string) {
 	return fmt.Sprintf("%x", md5.Sum([]byte(s)))
 }
 
+// make base64 from []byte
+func base64Str(b []byte) string {
+	return base64.StdEncoding.EncodeToString(b)
+}
+
 // URL encode
 func encodeURL(uri string) string {
 	return base64.URLEncoding.EncodeToString([]byte(uri))
 }
 
-// filter useless headers
-func filterHeaders(headers http.Header) http.Header {
-	for k, _ := range headers {
-		if strings.Contains(strings.ToLower(k), "x-") == false {
-			headers.Del(k)
-		}
+func md5sum(fd io.Reader) (string, int64, error) {
+	var result []byte
+	hash := md5.New()
+	if written, err := io.Copy(hash, fd); err != nil {
+		return "", written, err
+	} else {
+		return hex.EncodeToString(hash.Sum(result)), written, nil
 	}
-	return headers
-}
-
-// headers to string
-func parseHeaders(headers http.Header) string {
-	result := ""
-	for k, v := range headers {
-		result += fmt.Sprintf("%s:%s;", k, v[0])
-	}
-	return result
 }
 
 // Because of io.Copy use a 32Kb buffer, and, it is hard coded
@@ -181,27 +177,17 @@ func newFileInfo(headers http.Header) (fileInfo FileInfo) {
 
 // Request Error
 type ReqError struct {
-	err       error
-	RequestId string
+	err     error
+	Headers http.Header
 }
 
-func newRespError(requestId string, respStatus string) *ReqError {
+func newRespError(body string, headers http.Header) *ReqError {
 	return &ReqError{
-		RequestId: requestId,
-		err:       errors.New(respStatus),
+		Headers: headers,
+		err:     errors.New(body),
 	}
 }
 
 func (r *ReqError) Error() string {
-	return r.err.Error()
-}
-
-func md5sum(fd io.Reader) (string, int64, error) {
-	var result []byte
-	hash := md5.New()
-	if written, err := io.Copy(hash, fd); err != nil {
-		return "", written, err
-	} else {
-		return hex.EncodeToString(hash.Sum(result)), written, nil
-	}
+	return fmt.Sprint(r.Headers, r.err.Error())
 }

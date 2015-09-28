@@ -11,8 +11,10 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 )
 
+// UPYUN MultiPart Upload API
 type UpYunMultiPart struct {
 	upYunHTTPCore
 
@@ -21,20 +23,22 @@ type UpYunMultiPart struct {
 	BlockSize int64
 }
 
-type UploadBody struct {
+// upload response body
+type UploadResp struct {
 	SaveToken string `json:"save_token"`
 	Secret    string `json:"token_secret"`
 	Bucket    string `json:"bucket_name"`
-	Blocks    string `json:"blocks"`
+	Blocks    int    `json:"blocks"`
 	Status    []int  `json:"status"`
 	ExpireAt  int64  `json:"expire_at"`
 }
 
-type MergeBody struct {
+// merge response body
+type MergeResp struct {
 	Path          string `json:"path"`
 	ContentType   string `json:"mimetype"`
-	ContentLength int    `json:"file_size"`
-	LastModify    int    `json:"last_modified"`
+	ContentLength string `json:"file_size"`
+	LastModify    int64  `json:"last_modified"`
 	Signature     string `json:"signature"`
 	ImageWidth    int    `json:"image_width"`
 	ImageHeight   int    `json:"image_height"`
@@ -58,7 +62,8 @@ func NewUpYunMultiPart(bucket, apikey string, blocksize int64) *UpYunMultiPart {
 	return up
 }
 
-func (ump *UpYunMultiPart) makeMPAuth(secret string, kwargs map[string]string) string {
+// make multipart upload authorization
+func (ump *UpYunMultiPart) makeMPAuth(secret string, kwargs map[string]interface{}) string {
 	var keys []string
 	for k, _ := range kwargs {
 		keys = append(keys, k)
@@ -67,13 +72,13 @@ func (ump *UpYunMultiPart) makeMPAuth(secret string, kwargs map[string]string) s
 
 	sign := ""
 	for _, k := range keys {
-		sign += k + kwargs[k]
+		sign += k + fmt.Sprint(kwargs[k])
 	}
 
 	return md5Str(sign + secret)
 }
 
-func (ump *UpYunMultiPart) makePolicy(kwargs map[string]string) (string, error) {
+func (ump *UpYunMultiPart) makePolicy(kwargs map[string]interface{}) (string, error) {
 	data, err := json.Marshal(kwargs)
 	if err != nil {
 		return "", err
@@ -83,40 +88,45 @@ func (ump *UpYunMultiPart) makePolicy(kwargs map[string]string) (string, error) 
 }
 
 func (ump *UpYunMultiPart) InitUpload(key string, value *os.File,
-	expire int64, options map[string]string) ([]byte, error) {
+	expire int64, options map[string]interface{}) ([]byte, error) {
+	// seek at start point
 	value.Seek(0, 0)
-	if options == nil {
-		options = make(map[string]string)
-	}
-	options["path"] = key
-	options["expiration"] = fmt.Sprint(expire)
-
 	hash, fsize, err := md5sum(value)
 	if err != nil {
 		return nil, err
 	}
 
-	options["file_hash"] = string(hash)
-	options["file_size"] = fmt.Sprint(fsize)
+	opt := map[string]interface{}{
+		"path":        key,
+		"expiration":  time.Now().Unix() + expire,
+		"file_hash":   string(hash),
+		"file_size":   fsize,
+		"file_blocks": (fsize + ump.BlockSize - 1) / ump.BlockSize,
+	}
+	if options != nil {
+		for k, v := range options {
+			opt[k] = v
+		}
+	}
 
-	blocks := (fsize + ump.BlockSize - 1) / ump.BlockSize
-	options["file_blocks"] = fmt.Sprint(blocks)
-
-	policy, err := ump.makePolicy(options)
+	// make policy
+	policy, err := ump.makePolicy(opt)
 	if err != nil {
 		return nil, err
 	}
 
-	signature := ump.makeMPAuth(ump.APIKey, options)
+	// make signature
+	signature := ump.makeMPAuth(ump.APIKey, opt)
 	payload := fmt.Sprintf("policy=%s&signature=%s", policy, signature)
 
+	// set http headers
 	headers := map[string]string{
 		"Content-Length": fmt.Sprint(len(payload)),
 		"Content-Type":   "application/x-www-form-urlencoded",
 	}
 
-	url := fmt.Sprintf("http://%s/%s", ump.endpoint, ump.Bucket)
-	resp, err := ump.doHttpRequest("POST",
+	url := fmt.Sprintf("http://%s/%s/", ump.endpoint, ump.Bucket)
+	resp, err := ump.doHTTPRequest("POST",
 		url, headers, strings.NewReader(payload))
 
 	if err != nil {
@@ -130,13 +140,14 @@ func (ump *UpYunMultiPart) InitUpload(key string, value *os.File,
 		return body, err
 	}
 
-	return body, errors.New(parseHeaders(resp.Header))
+	return nil, newRespError(string(body), resp.Header)
 }
 
 func (ump *UpYunMultiPart) UploadBlock(fd *os.File, bindex int, expire int64,
 	fpath, saveToken, secret string) ([]byte, error) {
-	// seek to this block's start point
+
 	block := make([]byte, ump.BlockSize)
+	// seek to this block's start point
 	_, err := fd.Seek(ump.BlockSize*int64(bindex), 0)
 	if err != nil {
 		return nil, err
@@ -155,10 +166,10 @@ func (ump *UpYunMultiPart) UploadBlock(fd *os.File, bindex int, expire int64,
 		return nil, err
 	}
 
-	opts := map[string]string{
+	opts := map[string]interface{}{
 		"save_token":  saveToken,
 		"expiration":  fmt.Sprint(expire),
-		"block_index": fmt.Sprint(bindex),
+		"block_index": bindex,
 		"block_hash":  string(hash),
 	}
 
@@ -168,7 +179,7 @@ func (ump *UpYunMultiPart) UploadBlock(fd *os.File, bindex int, expire int64,
 	}
 
 	signature := ump.makeMPAuth(secret, opts)
-	url := fmt.Sprintf("http://%s/%s", ump.endpoint, ump.Bucket)
+	url := fmt.Sprintf("http://%s/%s/", ump.endpoint, ump.Bucket)
 
 	resp, err := ump.doFormRequest(url, policy, signature, fpath, bytes.NewBuffer(rblock))
 	if err != nil {
@@ -182,12 +193,12 @@ func (ump *UpYunMultiPart) UploadBlock(fd *os.File, bindex int, expire int64,
 		return body, err
 	}
 
-	return body, errors.New(parseHeaders(resp.Header))
+	return nil, newRespError(string(body), resp.Header)
 }
 
 func (ump *UpYunMultiPart) MergeBlock(saveToken, secret string,
 	expire int64) ([]byte, error) {
-	opts := map[string]string{
+	opts := map[string]interface{}{
 		"save_token": saveToken,
 		"expiration": fmt.Sprint(expire),
 	}
@@ -205,8 +216,8 @@ func (ump *UpYunMultiPart) MergeBlock(saveToken, secret string,
 		"Content-Type":   "application/x-www-form-urlencoded",
 	}
 
-	url := fmt.Sprintf("http://%s/%s", ump.endpoint, ump.Bucket)
-	resp, err := ump.doHttpRequest("POST",
+	url := fmt.Sprintf("http://%s/%s/", ump.endpoint, ump.Bucket)
+	resp, err := ump.doHTTPRequest("POST",
 		url, headers, strings.NewReader(payload))
 
 	if err != nil {
@@ -220,12 +231,12 @@ func (ump *UpYunMultiPart) MergeBlock(saveToken, secret string,
 		return body, err
 	}
 
-	return body, errors.New(parseHeaders(resp.Header))
+	return nil, newRespError(string(body), resp.Header)
 }
 
 // TODO: support io.reader
 func (ump *UpYunMultiPart) Put(key, fpath string,
-	expire int64, options map[string]string) ([]byte, error) {
+	expire int64, options map[string]interface{}) (*MergeResp, error) {
 	fd, err := os.Open(fpath)
 	if err != nil {
 		return nil, err
@@ -233,9 +244,10 @@ func (ump *UpYunMultiPart) Put(key, fpath string,
 
 	rdata, err := ump.InitUpload(key, fd, expire, options)
 	if err != nil {
-		return rdata, errors.New("failed to init upload." + err.Error())
+		return nil, errors.New("failed to init upload." + err.Error())
 	}
-	var ub UploadBody
+
+	var ub UploadResp
 	if err := json.Unmarshal(rdata, &ub); err != nil {
 		return nil, err
 	}
@@ -245,11 +257,9 @@ func (ump *UpYunMultiPart) Put(key, fpath string,
 	status := ub.Status
 	for try := 1; try <= 3; try++ {
 		ok := 0
-		var err error
-		var data []byte
 		for idx, _ := range status {
 			if status[idx] == 0 {
-				data, err = ump.UploadBlock(fd, idx, expire, fpath, saveToken, secret)
+				_, err := ump.UploadBlock(fd, idx, expire, fpath, saveToken, secret)
 				if err != nil {
 					break
 				}
@@ -263,14 +273,19 @@ func (ump *UpYunMultiPart) Put(key, fpath string,
 		}
 
 		if try == 3 {
-			return data, errors.New("failed to upload block." + err.Error())
+			return nil, errors.New("failed to upload block." + err.Error())
 		}
 	}
 
 	data, err := ump.MergeBlock(saveToken, secret, expire)
 	if err != nil {
-		return data, errors.New("failed to merge blocks." + err.Error())
+		return nil, errors.New("failed to merge blocks." + err.Error())
 	}
 
-	return data, nil
+	var mr MergeResp
+	if err := json.Unmarshal(data, &mr); err != nil {
+		return nil, err
+	}
+
+	return &mr, nil
 }

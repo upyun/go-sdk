@@ -231,7 +231,7 @@ func (u *UpYun) Purge(urls []string) (string, error) {
 	form.Add("purge", purgeList)
 
 	body := strings.NewReader(form.Encode())
-	resp, err := u.doHttpRequest("POST", purge, headers, body)
+	resp, err := u.doHTTPRequest("POST", purge, headers, body)
 	defer resp.Body.Close()
 
 	content, err := ioutil.ReadAll(resp.Body)
@@ -281,7 +281,7 @@ func (u *UpYun) doRESTRequest(method, uri string, headers map[string]string,
 		rc = nil
 	}
 
-	resp, err := u.doHttpRequest(method, url, headers, rc)
+	resp, err := u.doHTTPRequest(method, url, headers, rc)
 	if err != nil {
 		return "", nil, err
 	}
@@ -302,16 +302,16 @@ func (u *UpYun) doRESTRequest(method, uri string, headers map[string]string,
 		if method == "GET" && value != nil {
 			written, err := chunkedCopy(value.(io.Writer), resp.Body)
 
-			return strconv.FormatInt(written, 10), filterHeaders(resp.Header), err
+			return strconv.FormatInt(written, 10), resp.Header, err
 		} else if method == "GET" && value == nil {
 			body, err := ioutil.ReadAll(resp.Body)
 			return string(body[:]), resp.Header, err
 		} else if method == "PUT" || method == "HEAD" {
-			return "", filterHeaders(resp.Header), nil
+			return "", resp.Header, nil
 		} else {
 			return "", nil, nil
 		}
 	}
 
-	return "", filterHeaders(resp.Header), newRespError(requestId, resp.Status)
+	return "", resp.Header, newRespError(requestId, resp.Header)
 }

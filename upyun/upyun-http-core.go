@@ -48,7 +48,6 @@ func (core *upYunHTTPCore) doFormRequest(url, policy, sign,
 	// generate form data
 	err := func() error {
 		writer := multipart.NewWriter(body)
-
 		defer writer.Close()
 
 		writer.WriteField("policy", policy)
@@ -61,19 +60,21 @@ func (core *upYunHTTPCore) doFormRequest(url, policy, sign,
 		if _, err = chunkedCopy(part, fd); err != nil {
 			return err
 		}
+
 		headers["Content-Type"] = writer.FormDataContentType()
 
 		return nil
 	}()
+
 	if err != nil {
 		return nil, err
 	}
 
-	return core.doHttpRequest("POST", url, headers, body)
+	return core.doHTTPRequest("POST", url, headers, body)
 }
 
 // do http request
-func (core *upYunHTTPCore) doHttpRequest(method, url string, headers map[string]string,
+func (core *upYunHTTPCore) doHTTPRequest(method, url string, headers map[string]string,
 	body io.Reader) (resp *http.Response, err error) {
 	req, err := http.NewRequest(method, url, body)
 	if err != nil {
