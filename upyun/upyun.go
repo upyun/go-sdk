@@ -159,17 +159,22 @@ type Info struct {
 	Type string
 }
 
-func newInfo(s string) Info {
+func newInfo(s string) *Info {
 	infoList := strings.Split(s, "\t")
+	if len(infoList) != 4 {
+		return nil
+	}
+
 	size, _ := strconv.ParseInt(infoList[2], 10, 64)
 	time, _ := strconv.ParseInt(infoList[3], 10, 64)
 
-	return Info{
-		Name: infoList[0],
-		Type: infoList[1],
-		Size: size,
-		Time: time,
-	}
+	info := new(Info)
+	info.Name = infoList[0]
+	info.Type = infoList[1]
+	info.Size = size
+	info.Time = time
+
+	return info
 }
 
 // FileInfo when HEAD file
@@ -444,10 +449,13 @@ func (u *UpYun) GetList(key string) ([]Info, error) {
 	}
 
 	list := strings.Split(ret, "\n")
-	infos := make([]Info, len(list))
+	infos := []Info{}
 
-	for i, v := range list {
-		infos[i] = newInfo(v)
+	for _, v := range list {
+		info := newInfo(v)
+		if info != nil {
+			infos = append(infos, *info)
+		}
 	}
 
 	return infos, nil
