@@ -2,8 +2,6 @@ package upyun
 
 import (
 	"bytes"
-	"errors"
-	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -21,26 +19,15 @@ func (core *upYunHTTPCore) SetTimeout(timeout int) {
 	core.httpClient = &http.Client{
 		Transport: &http.Transport{
 			Dial: timeoutDialer(timeout),
+			// http://studygolang.com/articles/3138
+			DisableKeepAlives: true,
 		},
 	}
 }
 
-// Set HTTP endpoint
-func (core *upYunHTTPCore) SetEndpoint(endpoint string) (string, error) {
-	for _, v := range endpoints {
-		if v == endpoint {
-			core.endpoint = endpoint
-			return endpoint, nil
-		}
-	}
-
-	err := fmt.Sprintf("Invalid endpoint, pick from Auto, Telecom, Cnc, Ctt")
-	return core.endpoint, errors.New(err)
-}
-
 // do http form request
 func (core *upYunHTTPCore) doFormRequest(url, policy, sign,
-	fpath string, fd io.Reader) (*http.Response, error) {
+	fname string, fd io.Reader) (*http.Response, error) {
 
 	body := &bytes.Buffer{}
 	headers := make(map[string]string)
@@ -52,7 +39,8 @@ func (core *upYunHTTPCore) doFormRequest(url, policy, sign,
 
 		writer.WriteField("policy", policy)
 		writer.WriteField("signature", sign)
-		part, err := writer.CreateFormFile("file", filepath.Base(fpath))
+		// hack: filename is useless
+		part, err := writer.CreateFormFile("file", filepath.Base(fname))
 		if err != nil {
 			return err
 		}

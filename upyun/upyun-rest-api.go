@@ -15,6 +15,7 @@ import (
 	"strings"
 )
 
+// UPYUN REST API Client
 type UpYun struct {
 	// Core
 	upYunHTTPCore
@@ -26,6 +27,10 @@ type UpYun struct {
 	ChunkSize int
 }
 
+// NewUpYun return a new UPYUN REST API client given a bucket name,
+// username, password. As Default, endpoint is set to Auto, http
+// client connection timeout is set to defalutConnectionTimeout which
+// is equal to 60 seconds.
 func NewUpYun(bucket, username, passwd string) *UpYun {
 	u := new(UpYun)
 	u.Bucket = bucket
@@ -40,18 +45,34 @@ func NewUpYun(bucket, username, passwd string) *UpYun {
 	return u
 }
 
+// make UpYun REST Authorization
 func (u *UpYun) makeRESTAuth(method, uri, date, lengthStr string) string {
 	sign := []string{method, uri, date, lengthStr, md5Str(u.Passwd)}
 
 	return "UpYun " + u.Username + ":" + md5Str(strings.Join(sign, "&"))
 }
 
+// make UpYun Purge Authorization
 func (u *UpYun) makePurgeAuth(purgeList, date string) string {
 	sign := []string{purgeList, u.Bucket, date, md5Str(u.Passwd)}
 
 	return "UpYun " + u.Bucket + ":" + u.Username + ":" + md5Str(strings.Join(sign, "&"))
 }
 
+// SetEndpoint sets the request endpoint to UPYUN REST Server.
+func (u *UpYun) SetEndpoint(endpoint string) (string, error) {
+	for _, v := range endpoints {
+		if v == endpoint {
+			u.endpoint = endpoint
+			return endpoint, nil
+		}
+	}
+
+	err := fmt.Sprintf("Invalid endpoint, pick from Auto, Telecom, Cnc, Ctt")
+	return u.endpoint, errors.New(err)
+}
+
+// Usage gets the usage of the bucket in UPYUN File System
 func (u *UpYun) Usage() (int64, error) {
 	result, _, err := u.doRESTRequest("GET", "/?usage", nil, nil)
 	if err != nil {
@@ -61,6 +82,7 @@ func (u *UpYun) Usage() (int64, error) {
 	return strconv.ParseInt(result, 10, 64)
 }
 
+// Mkdir creates a directory in UPYUN File System
 func (u *UpYun) Mkdir(key string) error {
 	headers := make(map[string]string)
 
@@ -72,8 +94,13 @@ func (u *UpYun) Mkdir(key string) error {
 	return err
 }
 
-func (u *UpYun) Put(key string, value io.Reader, useMD5 bool, secret, contentType string) (http.Header, error) {
-	headers := make(map[string]string)
+// Put uploads filelike object to UPYUN File System
+func (u *UpYun) Put(key string, value io.Reader, useMD5 bool, secret, contentType string,
+	headers map[string]string) (http.Header, error) {
+	if headers == nil {
+		headers = make(map[string]string)
+	}
+
 	headers["mkdir"] = "true"
 
 	// Content-Type
@@ -139,18 +166,22 @@ func (u *UpYun) Put(key string, value io.Reader, useMD5 bool, secret, contentTyp
 	return nil, errors.New("Invalid Reader")
 }
 
+// Get gets the specified file in UPYUN File System
 func (u *UpYun) Get(key string, value io.Writer) error {
 	_, _, err := u.doRESTRequest("GET", key, nil, value)
 
 	return err
 }
 
+// Delete deletes the specified **file** in UPYUN File System.
 func (u *UpYun) Delete(key string) error {
 	_, _, err := u.doRESTRequest("DELETE", key, nil, nil)
 
 	return err
 }
 
+// GetList lists items in key. The number of items must be
+// less then 100
 func (u *UpYun) GetList(key string) ([]Info, error) {
 	ret, _, err := u.doRESTRequest("GET", key, nil, nil)
 	if err != nil {
@@ -164,12 +195,13 @@ func (u *UpYun) GetList(key string) ([]Info, error) {
 		if len(v) == 0 {
 			continue
 		}
-		infoList = append(infoList, newInfo(v))
+		infoList = append(infoList, *newInfo(v))
 	}
 
 	return infoList, nil
 }
 
+// LoopList list items iteratively.
 func (u *UpYun) LoopList(key, iter string, limit int) ([]Info, string, error) {
 	headers := map[string]string{
 		"X-List-Limit": fmt.Sprint(limit),
@@ -190,7 +222,7 @@ func (u *UpYun) LoopList(key, iter string, limit int) ([]Info, string, error) {
 		if len(v) == 0 {
 			continue
 		}
-		infoList = append(infoList, newInfo(v))
+		infoList = append(infoList, *newInfo(v))
 	}
 
 	nextIter := ""
@@ -205,6 +237,7 @@ func (u *UpYun) LoopList(key, iter string, limit int) ([]Info, string, error) {
 	return infoList, nextIter, nil
 }
 
+// GetInfo gets information of item in UPYUN File System
 func (u *UpYun) GetInfo(key string) (FileInfo, error) {
 	_, headers, err := u.doRESTRequest("HEAD", key, nil, nil)
 	if err != nil {
@@ -216,6 +249,7 @@ func (u *UpYun) GetInfo(key string) (FileInfo, error) {
 	return fileInfo, nil
 }
 
+// Purge post a purge request to UPYUN Purge Server
 func (u *UpYun) Purge(urls []string) (string, error) {
 	purge := fmt.Sprintf("http://%s/purge/", purgeEndpoint)
 
@@ -286,9 +320,7 @@ func (u *UpYun) doRESTRequest(method, uri string, headers map[string]string,
 		return "", nil, err
 	}
 
-	if _, ok := value.(io.Closer); ok {
-		defer resp.Body.Close()
-	}
+	defer resp.Body.Close()
 
 	// retrive request id
 	requestId := "Unknown"

@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// UPYUN HTTP FORM API
+// UPYUN HTTP FORM API Client
 type UpYunForm struct {
 	// Core
 	upYunHTTPCore
@@ -20,6 +20,7 @@ type UpYunForm struct {
 	Bucket string
 }
 
+// Response from UPYUN Form API Server
 type FormAPIResp struct {
 	Code      int    `json:"code"`
 	Msg       string `json:"message"`
@@ -32,24 +33,27 @@ type FormAPIResp struct {
 	Sign      string `json:"sign"`
 }
 
+// NewUpYunForm return a UPYUN Form API client given
+// a form api key and bucket name. As Default, endpoint
+// is set to Auto, http client connection timeout is
+// set to defalutConnectionTimeout which is equal to
+// 60 seconds.
 func NewUpYunForm(bucket, key string) *UpYunForm {
-	up := &UpYunForm{
+	upm := &UpYunForm{
 		Key:    key,
 		Bucket: bucket,
 	}
 
-	up.httpClient = &http.Client{
-		Transport: &http.Transport{
-			Dial: timeoutDialer(defaultConnectTimeout),
-		},
-	}
+	upm.httpClient = &http.Client{}
+	upm.SetTimeout(defaultConnectTimeout)
+	upm.endpoint = Auto
 
-	up.endpoint = Auto
-
-	return up
+	return upm
 }
 
-func (uf *UpYunForm) Put(saveas, path string, expireAfter int64,
+// Put posts a http form request given reader, save path,
+// expiration, other options and returns a FormAPIResp pointer.
+func (uf *UpYunForm) Put(fpath, saveas string, expireAfter int64,
 	options map[string]string) (*FormAPIResp, error) {
 	if options == nil {
 		options = make(map[string]string)
@@ -67,15 +71,15 @@ func (uf *UpYunForm) Put(saveas, path string, expireAfter int64,
 	policy := base64.StdEncoding.EncodeToString(args)
 	sig := md5Str(policy + "&" + uf.Key)
 
-	file, err := os.Open(path)
+	fd, err := os.Open(fpath)
 	if err != nil {
 		return nil, err
 	}
 
-	defer file.Close()
+	defer fd.Close()
 
 	url := fmt.Sprintf("http://%s/%s", uf.endpoint, uf.Bucket)
-	resp, err := uf.doFormRequest(url, policy, sig, path, file)
+	resp, err := uf.doFormRequest(url, policy, sig, fpath, fd)
 	if err != nil {
 		return nil, err
 	}

@@ -25,26 +25,32 @@ type UpYunMultiPart struct {
 
 // upload response body
 type UploadResp struct {
+	// returns after init request
 	SaveToken string `json:"save_token"`
-	Secret    string `json:"token_secret"`
-	Bucket    string `json:"bucket_name"`
-	Blocks    int    `json:"blocks"`
-	Status    []int  `json:"status"`
-	ExpireAt  int64  `json:"expire_at"`
+	// token_secert is equal to UPYUN Form API KEY
+	Secret string `json:"token_secret"`
+	// UPYUN Bucket Name
+	Bucket string `json:"bucket_name"`
+	// Number of Blocks
+	Blocks   int   `json:"blocks"`
+	Status   []int `json:"status"`
+	ExpireAt int64 `json:"expire_at"`
 }
 
 // merge response body
 type MergeResp struct {
-	Path          string `json:"path"`
-	ContentType   string `json:"mimetype"`
-	ContentLength string `json:"file_size"`
-	LastModify    int64  `json:"last_modified"`
-	Signature     string `json:"signature"`
-	ImageWidth    int    `json:"image_width"`
-	ImageHeight   int    `json:"image_height"`
-	ImageFrames   int    `json:"image_frames"`
+	Path          string      `json:"path"`
+	ContentType   string      `json:"mimetype"`
+	ContentLength interface{} `json:"file_size"`
+	LastModify    int64       `json:"last_modified"`
+	Signature     string      `json:"signature"`
+	ImageWidth    int         `json:"image_width"`
+	ImageHeight   int         `json:"image_height"`
+	ImageFrames   int         `json:"image_frames"`
 }
 
+// NewUpYunMultiPart returns a new UPYUN Multipart Upload API client
+// given bucket name, form api key and blocksize.
 func NewUpYunMultiPart(bucket, apikey string, blocksize int64) *UpYunMultiPart {
 	up := &UpYunMultiPart{
 		APIKey:    apikey,
@@ -87,6 +93,7 @@ func (ump *UpYunMultiPart) makePolicy(kwargs map[string]interface{}) (string, er
 	return base64.StdEncoding.EncodeToString(data), nil
 }
 
+// InitUpload initalizes a multipart upload request
 func (ump *UpYunMultiPart) InitUpload(key string, value *os.File,
 	expire int64, options map[string]interface{}) ([]byte, error) {
 	// seek at start point
@@ -98,7 +105,7 @@ func (ump *UpYunMultiPart) InitUpload(key string, value *os.File,
 
 	opt := map[string]interface{}{
 		"path":        key,
-		"expiration":  time.Now().Unix() + expire,
+		"expiration":  time.Now().UTC().Unix() + expire,
 		"file_hash":   string(hash),
 		"file_size":   fsize,
 		"file_blocks": (fsize + ump.BlockSize - 1) / ump.BlockSize,
@@ -143,6 +150,7 @@ func (ump *UpYunMultiPart) InitUpload(key string, value *os.File,
 	return nil, newRespError(string(body), resp.Header)
 }
 
+// UploadBlock uploads a block
 func (ump *UpYunMultiPart) UploadBlock(fd *os.File, bindex int, expire int64,
 	fpath, saveToken, secret string) ([]byte, error) {
 
@@ -168,7 +176,7 @@ func (ump *UpYunMultiPart) UploadBlock(fd *os.File, bindex int, expire int64,
 
 	opts := map[string]interface{}{
 		"save_token":  saveToken,
-		"expiration":  fmt.Sprint(expire),
+		"expiration":  time.Now().UTC().Unix() + expire,
 		"block_index": bindex,
 		"block_hash":  string(hash),
 	}
@@ -196,11 +204,12 @@ func (ump *UpYunMultiPart) UploadBlock(fd *os.File, bindex int, expire int64,
 	return nil, newRespError(string(body), resp.Header)
 }
 
+// MergeBlock posts a merge request to merge all blocks uploaded
 func (ump *UpYunMultiPart) MergeBlock(saveToken, secret string,
 	expire int64) ([]byte, error) {
 	opts := map[string]interface{}{
 		"save_token": saveToken,
-		"expiration": fmt.Sprint(expire),
+		"expiration": time.Now().UTC().Unix() + expire,
 	}
 
 	policy, err := ump.makePolicy(opts)
@@ -234,13 +243,14 @@ func (ump *UpYunMultiPart) MergeBlock(saveToken, secret string,
 	return nil, newRespError(string(body), resp.Header)
 }
 
-// TODO: support io.reader
+// Put uploads a file through UPYUN MultiPart Upload API
 func (ump *UpYunMultiPart) Put(key, fpath string,
 	expire int64, options map[string]interface{}) (*MergeResp, error) {
 	fd, err := os.Open(fpath)
 	if err != nil {
 		return nil, err
 	}
+	defer fd.Close()
 
 	rdata, err := ump.InitUpload(key, fd, expire, options)
 	if err != nil {
@@ -259,7 +269,7 @@ func (ump *UpYunMultiPart) Put(key, fpath string,
 		ok := 0
 		for idx, _ := range status {
 			if status[idx] == 0 {
-				_, err := ump.UploadBlock(fd, idx, expire, fpath, saveToken, secret)
+				_, err = ump.UploadBlock(fd, idx, expire, fpath, saveToken, secret)
 				if err != nil {
 					break
 				}

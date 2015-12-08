@@ -14,8 +14,9 @@ import (
 type UpYunMedia struct {
 	upYunHTTPCore // HTTP Core
 
-	username string
-	passwd   string
+	Username string
+	Passwd   string
+	Bucket   string
 }
 
 // status response
@@ -23,24 +24,25 @@ type MediaStatusResp struct {
 	Tasks map[string]interface{} `json:"tasks"`
 }
 
-func NewUpYunMedia(user, pass string) *UpYunMedia {
-	client := &http.Client{
-		Transport: &http.Transport{
-			Dial: timeoutDialer(defaultConnectTimeout),
-		},
-	}
+// NewUpYunMedia returns a new UPYUN Media API client given
+// a bucket name, username, password. http client connection
+// timeout is set to defalutConnectionTimeout which
+// is equal to 60 seconds.
 
+func NewUpYunMedia(bucket, user, pass string) *UpYunMedia {
 	up := &UpYunMedia{
-		username: user,
-		passwd:   md5Str(pass),
+		Username: user,
+		Passwd:   md5Str(pass),
+		Bucket:   bucket,
 	}
 
-	// inherit from upYunHTTPCore
+	client := &http.Client{}
+	up.SetTimeout(defaultConnectTimeout)
+
 	up.endpoint = "p0.api.upyun.com"
 	up.httpClient = client
 
 	return up
-
 }
 
 func (upm *UpYunMedia) makeMediaAuth(kwargs map[string]string) string {
@@ -56,12 +58,12 @@ func (upm *UpYunMedia) makeMediaAuth(kwargs map[string]string) string {
 		auth += k + kwargs[k]
 	}
 
-	return fmt.Sprintf("UPYUN %s:%s", upm.username,
-		md5Str(upm.username+auth+upm.passwd))
+	return fmt.Sprintf("UPYUN %s:%s", upm.Username,
+		md5Str(upm.Username+auth+upm.Passwd))
 }
 
 // Send Media Tasks Reqeust
-func (upm *UpYunMedia) PostTasks(bucket, src, notify string,
+func (upm *UpYunMedia) PostTasks(src, notify string,
 	tasks []map[string]interface{}) ([]string, error) {
 	data, err := json.Marshal(tasks)
 	if err != nil {
@@ -69,7 +71,7 @@ func (upm *UpYunMedia) PostTasks(bucket, src, notify string,
 	}
 
 	kwargs := map[string]string{
-		"bucket_name": bucket,
+		"bucket_name": upm.Bucket,
 		"source":      src,
 		"notify_url":  notify,
 		"tasks":       base64Str(data),
@@ -100,11 +102,10 @@ func (upm *UpYunMedia) PostTasks(bucket, src, notify string,
 }
 
 // Get Task Progress
-func (upm *UpYunMedia) GetProgress(bucket,
-	task_ids string) (*MediaStatusResp, error) {
+func (upm *UpYunMedia) GetProgress(task_ids string) (*MediaStatusResp, error) {
 
 	kwargs := map[string]string{
-		"bucket_name": bucket,
+		"bucket_name": upm.Bucket,
 		"task_ids":    task_ids,
 	}
 

@@ -9,11 +9,13 @@ import (
 func main() {
 	uf := upyun.NewUpYunForm(config.Bucket, config.Apikey)
 	options := map[string]string{
-		//		"x-gmkerl-rotate": "90",
-		"notify-url": config.Notify,
+		"x-gmkerl-rotate": "90",
+		"notify-url":      config.Notify,
 	}
-	formResp, err := uf.Put("/{year}/{mon}/{day}/upload_{filename}{.suffix}",
-		"example/cc.jpg", 3600, options)
+	fmt.Print(options)
+
+	formResp, err := uf.Put("example/cc.jpg", "/{year}/{mon}/{day}/upload_{filename}{.suffix}",
+		3600, options)
 	if err != nil {
 		fmt.Println(err)
 	} else {
