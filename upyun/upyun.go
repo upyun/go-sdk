@@ -133,50 +133,52 @@ func SetChunkSize(chunksize int) {
 }
 
 // FileInfo when use getlist
-type Info struct {
+type FileInfo struct {
 	Size int64
-	Time int64
+	Time time.Time
 	Name string
 	Type string
 }
 
-func newInfo(s string) *Info {
-	infoList := strings.Split(s, "\t")
-	if len(infoList) != 4 {
-		return nil
-	}
-
-	size, _ := strconv.ParseInt(infoList[2], 10, 64)
-	time, _ := strconv.ParseInt(infoList[3], 10, 64)
-
-	return &Info{
-		Name: infoList[0],
-		Type: infoList[1],
-		Size: size,
-		Time: time,
-	}
-}
-
-// FileInfo when HEAD file
-type FileInfo struct {
-	Type string
-	Date string
-	Size int64
-}
-
-func newFileInfo(headers http.Header) (fileInfo FileInfo) {
-	for k, v := range headers {
-		switch {
-		case strings.Contains(k, "Type"):
-			fileInfo.Type = v[0]
-		case strings.Contains(k, "Size"):
-			fileInfo.Size, _ = strconv.ParseInt(v[0], 10, 64)
-		case strings.Contains(k, "Date"):
-			fileInfo.Date = v[0]
+func newFileInfo(arg interface{}) *FileInfo {
+	switch arg.(type) {
+	case string:
+		s := arg.(string)
+		infoList := strings.Split(s, "\t")
+		if len(infoList) != 4 {
+			return nil
 		}
-	}
 
-	return
+		size, _ := strconv.ParseInt(infoList[2], 10, 64)
+		timestamp, _ := strconv.ParseInt(infoList[3], 10, 64)
+		typ := "folder"
+		if infoList[1] != "F" {
+			typ = "not folder"
+		}
+
+		return &FileInfo{
+			Name: infoList[0],
+			Type: typ,
+			Size: size,
+			Time: time.Unix(timestamp, 0),
+		}
+
+	default:
+		var fileInfo FileInfo
+		headers := arg.(http.Header)
+		for k, v := range headers {
+			switch {
+			case strings.Contains(k, "File-Type"):
+				fileInfo.Type = v[0]
+			case strings.Contains(k, "File-Size"):
+				fileInfo.Size, _ = strconv.ParseInt(v[0], 10, 64)
+			case strings.Contains(k, "File-Date"):
+				timestamp, _ := strconv.ParseInt(v[0], 10, 64)
+				fileInfo.Time = time.Unix(timestamp, 0)
+			}
+		}
+		return &fileInfo
+	}
 }
 
 // Request Error

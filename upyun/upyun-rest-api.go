@@ -182,27 +182,27 @@ func (u *UpYun) Delete(key string) error {
 
 // GetList lists items in key. The number of items must be
 // less then 100
-func (u *UpYun) GetList(key string) ([]Info, error) {
+func (u *UpYun) GetList(key string) ([]FileInfo, error) {
 	ret, _, err := u.doRESTRequest("GET", key, nil, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	list := strings.Split(ret, "\n")
-	var infoList []Info
+	var infoList []FileInfo
 
 	for _, v := range list {
 		if len(v) == 0 {
 			continue
 		}
-		infoList = append(infoList, *newInfo(v))
+		infoList = append(infoList, *newFileInfo(v))
 	}
 
 	return infoList, nil
 }
 
 // LoopList list items iteratively.
-func (u *UpYun) LoopList(key, iter string, limit int) ([]Info, string, error) {
+func (u *UpYun) LoopList(key, iter string, limit int) ([]FileInfo, string, error) {
 	headers := map[string]string{
 		"X-List-Limit": fmt.Sprint(limit),
 		"X-List-Order": "asc",
@@ -217,12 +217,12 @@ func (u *UpYun) LoopList(key, iter string, limit int) ([]Info, string, error) {
 	}
 
 	list := strings.Split(ret, "\n")
-	var infoList []Info
+	var infoList []FileInfo
 	for _, v := range list {
 		if len(v) == 0 {
 			continue
 		}
-		infoList = append(infoList, *newInfo(v))
+		infoList = append(infoList, *newFileInfo(v))
 	}
 
 	nextIter := ""
@@ -246,7 +246,7 @@ func (u *UpYun) GetInfo(key string) (FileInfo, error) {
 
 	fileInfo := newFileInfo(headers)
 
-	return fileInfo, nil
+	return *fileInfo, nil
 }
 
 // Purge post a purge request to UPYUN Purge Server
@@ -309,9 +309,9 @@ func (u *UpYun) doRESTRequest(method, uri string, headers map[string]string,
 	headers["Date"] = date
 	headers["Authorization"] = u.makeRESTAuth(method, uri, date, lengthStr)
 
-	// Get method
+	// HEAD GET request has no body
 	rc, ok := value.(io.Reader)
-	if !ok {
+	if !ok || method == "GET" || method == "HEAD" {
 		rc = nil
 	}
 
