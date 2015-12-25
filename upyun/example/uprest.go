@@ -25,4 +25,8 @@ func main() {
 	x := fmt.Sprintf("/wm/cc%d.jpg", time.Now().Unix()%10000)
 	fmt.Println(up.Put(x, fd, false, "", "", headers))
 	fmt.Printf("http://bigfile.b0.upaiyun.com%s\n", x)
+	c := up.GetLargeList("/", true)
+	for {
+		fmt.Println(<-c)
+	}
 }

@@ -182,27 +182,75 @@ func (u *UpYun) Delete(key string) error {
 
 // GetList lists items in key. The number of items must be
 // less then 100
-func (u *UpYun) GetList(key string) ([]FileInfo, error) {
+func (u *UpYun) GetList(key string) ([]*FileInfo, error) {
 	ret, _, err := u.doRESTRequest("GET", key, nil, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	list := strings.Split(ret, "\n")
-	var infoList []FileInfo
+	var infoList []*FileInfo
 
 	for _, v := range list {
 		if len(v) == 0 {
 			continue
 		}
-		infoList = append(infoList, *newFileInfo(v))
+		infoList = append(infoList, newFileInfo(v))
 	}
 
 	return infoList, nil
 }
 
+// Note: key must be directory
+func (u *UpYun) GetLargeList(key string, recursive bool) chan *FileInfo {
+	var err error
+	var infos []*FileInfo
+	infoChannel := make(chan *FileInfo, 1000)
+	if !strings.HasSuffix(key, "/") {
+		key += "/"
+	}
+
+	go func() {
+		var listDir func(k string)
+		listDir = func(k string) {
+			iter := ""
+			limit := 100
+			for {
+				var niter string
+				infos, niter, err = u.loopList(k, iter, limit)
+				if err != nil {
+					continue
+				}
+				iter = niter
+				for _, f := range infos {
+					// absolute path
+					abs := k + f.Name
+					// relative path
+					f.Name = strings.Replace(abs, key, "", 1)
+					if f.Name[0] == '/' {
+						f.Name = f.Name[1:]
+					}
+					if recursive && f.Type == "folder" {
+						listDir(abs + "/")
+					}
+					infoChannel <- f
+				}
+				if iter == "" {
+					break
+				}
+			}
+		}
+
+		listDir(key)
+
+		close(infoChannel)
+	}()
+
+	return infoChannel
+}
+
 // LoopList list items iteratively.
-func (u *UpYun) LoopList(key, iter string, limit int) ([]FileInfo, string, error) {
+func (u *UpYun) loopList(key, iter string, limit int) ([]*FileInfo, string, error) {
 	headers := map[string]string{
 		"X-List-Limit": fmt.Sprint(limit),
 		"X-List-Order": "asc",
@@ -217,17 +265,20 @@ func (u *UpYun) LoopList(key, iter string, limit int) ([]FileInfo, string, error
 	}
 
 	list := strings.Split(ret, "\n")
-	var infoList []FileInfo
+	var infoList []*FileInfo
 	for _, v := range list {
 		if len(v) == 0 {
 			continue
 		}
-		infoList = append(infoList, *newFileInfo(v))
+		infoList = append(infoList, newFileInfo(v))
 	}
 
 	nextIter := ""
 	if _, ok := rtHeaders["X-Upyun-List-Iter"]; ok {
 		nextIter = rtHeaders["X-Upyun-List-Iter"][0]
+	} else {
+		// Maybe Wrong
+		return nil, "", nil
 	}
 
 	if nextIter == "g2gCZAAEbmV4dGQAA2VvZg" {
@@ -238,15 +289,15 @@ func (u *UpYun) LoopList(key, iter string, limit int) ([]FileInfo, string, error
 }
 
 // GetInfo gets information of item in UPYUN File System
-func (u *UpYun) GetInfo(key string) (FileInfo, error) {
+func (u *UpYun) GetInfo(key string) (*FileInfo, error) {
 	_, headers, err := u.doRESTRequest("HEAD", key, nil, nil)
 	if err != nil {
-		return FileInfo{}, err
+		return nil, err
 	}
 
 	fileInfo := newFileInfo(headers)
 
-	return *fileInfo, nil
+	return fileInfo, nil
 }
 
 // Purge post a purge request to UPYUN Purge Server

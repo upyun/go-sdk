@@ -6,7 +6,6 @@ import (
 	"crypto/md5"
 	"encoding/base64"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -153,7 +152,7 @@ func newFileInfo(arg interface{}) *FileInfo {
 		timestamp, _ := strconv.ParseInt(infoList[3], 10, 64)
 		typ := "folder"
 		if infoList[1] != "F" {
-			typ = "not folder"
+			typ = "file"
 		}
 
 		return &FileInfo{
@@ -183,17 +182,22 @@ func newFileInfo(arg interface{}) *FileInfo {
 
 // Request Error
 type ReqError struct {
-	err     error
+	// UPYUN API Server Response Body
+	Msg string
+	// UPYUN API Server Response Header
 	Headers http.Header
 }
 
 func newRespError(body string, headers http.Header) *ReqError {
 	return &ReqError{
+		Msg:     body,
 		Headers: headers,
-		err:     errors.New(body),
 	}
 }
 
 func (r *ReqError) Error() string {
-	return fmt.Sprint(r.Headers, r.err.Error())
+	if errCode, ok := r.Headers["X-Error-Code"]; ok {
+		return "X-Error-Code=" + errCode[0]
+	}
+	return fmt.Sprint(r.Msg)
 }
