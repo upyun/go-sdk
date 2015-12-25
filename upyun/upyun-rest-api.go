@@ -9,7 +9,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"net/url"
+	URL "net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -47,7 +47,8 @@ func NewUpYun(bucket, username, passwd string) *UpYun {
 
 // make UpYun REST Authorization
 func (u *UpYun) makeRESTAuth(method, uri, date, lengthStr string) string {
-	sign := []string{method, uri, date, lengthStr, md5Str(u.Passwd)}
+	raw, _ := URL.ParseRequestURI(uri)
+	sign := []string{method, raw.String(), date, lengthStr, md5Str(u.Passwd)}
 
 	return "UpYun " + u.Username + ":" + md5Str(strings.Join(sign, "&"))
 }
@@ -312,7 +313,7 @@ func (u *UpYun) Purge(urls []string) (string, error) {
 	headers["Authorization"] = u.makePurgeAuth(purgeList, date)
 	headers["Content-Type"] = "application/x-www-form-urlencoded;charset=utf-8"
 
-	form := make(url.Values)
+	form := make(URL.Values)
 	form.Add("purge", purgeList)
 
 	body := strings.NewReader(form.Encode())
