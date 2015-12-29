@@ -12,7 +12,7 @@ var (
 	username      = os.Getenv("UPYUN_USERNAME")
 	password      = os.Getenv("UPYUN_PASSWORD")
 	bucket        = os.Getenv("UPYUN_BUCKET")
-	apikey        = os.Getenv("UPYUN_APIKEY")
+	apikey        = os.Getenv("UPYUN_SECRET")
 	up            = NewUpYun(bucket, username, password)
 	upf           = NewUpYunForm(bucket, apikey)
 	ump           = NewUpYunMultiPart(bucket, apikey, 1024000)
@@ -238,6 +238,7 @@ func TestMultiPart(t *testing.T) {
 	mergeResp, err = ump.Put(upload, testPath+"/multipart", 3600, nil)
 	if err != nil {
 		t.Errorf("failed to put %s %v", upload, err)
+		return
 	}
 
 	if err = up.Delete(mergeResp.Path); err == nil {

@@ -17,7 +17,7 @@ type UpYunForm struct {
 	// Core
 	upYunHTTPCore
 
-	APIKey string
+	Secret string
 	Bucket string
 }
 
@@ -39,9 +39,9 @@ type FormAPIResp struct {
 // is set to Auto, http client connection timeout is
 // set to defalutConnectionTimeout which is equal to
 // 60 seconds.
-func NewUpYunForm(bucket, key string) *UpYunForm {
+func NewUpYunForm(bucket, secret string) *UpYunForm {
 	upm := &UpYunForm{
-		APIKey: key,
+		Secret: secret,
 		Bucket: bucket,
 	}
 
@@ -80,7 +80,7 @@ func (uf *UpYunForm) Put(fpath, saveas string, expireAfter int64,
 	}
 
 	policy := base64.StdEncoding.EncodeToString(args)
-	sig := md5Str(policy + "&" + uf.APIKey)
+	sig := md5Str(policy + "&" + uf.Secret)
 
 	fd, err := os.Open(fpath)
 	if err != nil {

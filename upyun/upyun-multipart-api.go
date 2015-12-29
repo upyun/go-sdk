@@ -19,7 +19,7 @@ type UpYunMultiPart struct {
 	upYunHTTPCore
 
 	Bucket    string
-	APIKey    string
+	Secret    string
 	BlockSize int64
 }
 
@@ -27,7 +27,7 @@ type UpYunMultiPart struct {
 type UploadResp struct {
 	// returns after init request
 	SaveToken string `json:"save_token"`
-	// token_secert is equal to UPYUN Form API KEY
+	// token_secert is equal to UPYUN Form API Secret
 	Secret string `json:"token_secret"`
 	// UPYUN Bucket Name
 	Bucket string `json:"bucket_name"`
@@ -51,9 +51,9 @@ type MergeResp struct {
 
 // NewUpYunMultiPart returns a new UPYUN Multipart Upload API client
 // given bucket name, form api key and blocksize.
-func NewUpYunMultiPart(bucket, apikey string, blocksize int64) *UpYunMultiPart {
+func NewUpYunMultiPart(bucket, secret string, blocksize int64) *UpYunMultiPart {
 	up := &UpYunMultiPart{
-		APIKey:    apikey,
+		Secret:    secret,
 		Bucket:    bucket,
 		BlockSize: blocksize,
 	}
@@ -123,7 +123,7 @@ func (ump *UpYunMultiPart) InitUpload(key string, value *os.File,
 	}
 
 	// make signature
-	signature := ump.makeMPAuth(ump.APIKey, opt)
+	signature := ump.makeMPAuth(ump.Secret, opt)
 	payload := fmt.Sprintf("policy=%s&signature=%s", policy, signature)
 
 	// set http headers

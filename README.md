@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.org/upyun/go-sdk.svg?branch=master)](https://travis-ci.org/upyun/go-sdk)
 
-    import "github.com/polym/go-sdk/upyun"
+    import "github.com/upyun/go-sdk/upyun"
 
 UPYUN Go SDK, 集成 [UPYUN HTTP REST 接口](http://docs.upyun.com/api/rest_api/)，[UPYUN HTTP FORM 接口](http://docs.upyun.com/api/form_api/)，[分块上传](http://docs.upyun.com/api/multipart_upload/) 和 [视频处理接口](http://docs.upyun.com/api/av_pretreatment/)
 
@@ -159,7 +159,7 @@ func (u *UpYun) Purge(urls []string) (string, error)
 
 ```go
 type UpYunForm struct {
-    APIKey    string    //
+    Secret    string    // 表单密钥
     Bucket string       // 空间名
 }
 ```
@@ -210,7 +210,7 @@ func (uf *UpYunForm) Put(fpath, saveas string, expireAfter int64,
 ```go
 type UpYunMultiPart struct {
     Bucket    string        // 空间名
-    APIKey    string        //
+    Secret    string        // 表单密钥
     BlockSize int64         // 分块大小, 建议 1024000
 }
 ```
@@ -221,7 +221,7 @@ type UpYunMultiPart struct {
 type UploadResp struct {
     // returns after init request
     SaveToken string `json:"save_token"`
-    // token_secert is equal to UPYUN Form API KEY
+    // token_secert is equal to UPYUN Form API Secret
     Secret string `json:"token_secret"`
     // UPYUN Bucket Name
     Bucket string `json:"bucket_name"`
@@ -250,7 +250,7 @@ type MergeResp struct {
 #### 初始化 UpYunMultiPart
 
 ```go
-func NewUpYunMultiPart(bucket, apikey string, blocksize int64) *UpYunMultiPart
+func NewUpYunMultiPart(bucket, secret string, blocksize int64) *UpYunMultiPart
 ```
 
 #### 上传
