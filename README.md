@@ -49,11 +49,7 @@ Table of Contents
 
 ## Usage
 
----
-
 ### UPYUN HTTP REST 接口
-
----
 
 #### UpYun
 
@@ -152,6 +148,8 @@ func (u *UpYun) GetLargeList(key string, recursive bool) chan *FileInfo
 ```go
 func (u *UpYun) Purge(urls []string) (string, error)
 ```
+
+---
 
 ### UPYUN HTTP 表单上传接口
 
