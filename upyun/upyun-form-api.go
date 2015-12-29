@@ -3,6 +3,7 @@ package upyun
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -16,7 +17,7 @@ type UpYunForm struct {
 	// Core
 	upYunHTTPCore
 
-	Key    string
+	APIKey string
 	Bucket string
 }
 
@@ -40,15 +41,25 @@ type FormAPIResp struct {
 // 60 seconds.
 func NewUpYunForm(bucket, key string) *UpYunForm {
 	upm := &UpYunForm{
-		Key:    key,
+		APIKey: key,
 		Bucket: bucket,
 	}
 
 	upm.httpClient = &http.Client{}
 	upm.SetTimeout(defaultConnectTimeout)
-	upm.endpoint = Auto
+	upm.SetEndpoint(Auto)
 
 	return upm
+}
+
+// SetEndpoint sets the request endpoint to UPYUN Form API Server.
+func (u *UpYunForm) SetEndpoint(ed int) error {
+	if ed >= Auto && ed <= Ctt {
+		u.endpoint = fmt.Sprintf("v%d.api.upyun.com", ed)
+		return nil
+	}
+
+	return errors.New("Invalid endpoint, pick from Auto, Telecom, Cnc, Ctt")
 }
 
 // Put posts a http form request given reader, save path,
@@ -69,7 +80,7 @@ func (uf *UpYunForm) Put(fpath, saveas string, expireAfter int64,
 	}
 
 	policy := base64.StdEncoding.EncodeToString(args)
-	sig := md5Str(policy + "&" + uf.Key)
+	sig := md5Str(policy + "&" + uf.APIKey)
 
 	fd, err := os.Open(fpath)
 	if err != nil {
@@ -95,5 +106,5 @@ func (uf *UpYunForm) Put(fpath, saveas string, expireAfter int64,
 		return &formResp, nil
 	}
 
-	return nil, newRespError(string(buf), resp.Header)
+	return nil, errors.New(string(buf))
 }

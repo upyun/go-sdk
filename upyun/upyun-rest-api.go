@@ -20,10 +20,9 @@ type UpYun struct {
 	// Core
 	upYunHTTPCore
 
-	Bucket   string
-	Username string
-	Passwd   string
-
+	Bucket    string
+	Username  string
+	Passwd    string
 	ChunkSize int
 }
 
@@ -32,17 +31,27 @@ type UpYun struct {
 // client connection timeout is set to defalutConnectionTimeout which
 // is equal to 60 seconds.
 func NewUpYun(bucket, username, passwd string) *UpYun {
-	u := new(UpYun)
-	u.Bucket = bucket
-	u.Username = username
-	u.Passwd = passwd
-
-	u.endpoint = Auto
+	u := &UpYun{
+		Bucket:   bucket,
+		Username: username,
+		Passwd:   passwd,
+	}
 
 	u.httpClient = &http.Client{}
+	u.SetEndpoint(Auto)
 	u.SetTimeout(defaultConnectTimeout)
 
 	return u
+}
+
+// SetEndpoint sets the request endpoint to UPYUN REST API Server.
+func (u *UpYun) SetEndpoint(ed int) error {
+	if ed >= Auto && ed <= Ctt {
+		u.endpoint = fmt.Sprintf("v%d.api.upyun.com", ed)
+		return nil
+	}
+
+	return errors.New("Invalid endpoint, pick from Auto, Telecom, Cnc, Ctt")
 }
 
 // make UpYun REST Authorization
@@ -58,19 +67,6 @@ func (u *UpYun) makePurgeAuth(purgeList, date string) string {
 	sign := []string{purgeList, u.Bucket, date, md5Str(u.Passwd)}
 
 	return "UpYun " + u.Bucket + ":" + u.Username + ":" + md5Str(strings.Join(sign, "&"))
-}
-
-// SetEndpoint sets the request endpoint to UPYUN REST Server.
-func (u *UpYun) SetEndpoint(endpoint string) (string, error) {
-	for _, v := range endpoints {
-		if v == endpoint {
-			u.endpoint = endpoint
-			return endpoint, nil
-		}
-	}
-
-	err := fmt.Sprintf("Invalid endpoint, pick from Auto, Telecom, Cnc, Ctt")
-	return u.endpoint, errors.New(err)
 }
 
 // Usage gets the usage of the bucket in UPYUN File System
@@ -303,7 +299,7 @@ func (u *UpYun) GetInfo(key string) (*FileInfo, error) {
 
 // Purge post a purge request to UPYUN Purge Server
 func (u *UpYun) Purge(urls []string) (string, error) {
-	purge := fmt.Sprintf("http://%s/purge/", purgeEndpoint)
+	purge := "http://purge.upyun.com/purge/"
 
 	date := genRFC1123Date()
 	purgeList := strings.Join(urls, "\n")
@@ -327,7 +323,9 @@ func (u *UpYun) Purge(urls []string) (string, error) {
 
 	if resp.StatusCode/100 == 2 {
 		result := make(map[string][]string)
-		json.Unmarshal(content, result)
+		if err := json.Unmarshal(content, &result); err != nil {
+			return "", err
+		}
 
 		return strings.Join(result["invalid_domain_of_url"], ","), nil
 	}
@@ -374,28 +372,18 @@ func (u *UpYun) doRESTRequest(method, uri string, headers map[string]string,
 
 	defer resp.Body.Close()
 
-	// retrive request id
-	requestId := "Unknown"
-
-	requestIds, ok := resp.Header[http.CanonicalHeaderKey("X-Request-Id")]
-	if ok {
-		requestId = strings.Join(requestIds, ",")
-	}
-
 	if (resp.StatusCode / 100) == 2 {
 		if method == "GET" && value != nil {
 			written, err := chunkedCopy(value.(io.Writer), resp.Body)
-
 			return strconv.FormatInt(written, 10), resp.Header, err
-		} else if method == "GET" && value == nil {
-			body, err := ioutil.ReadAll(resp.Body)
-			return string(body[:]), resp.Header, err
-		} else if method == "PUT" || method == "HEAD" {
-			return "", resp.Header, nil
-		} else {
-			return "", nil, nil
 		}
+		body, err := ioutil.ReadAll(resp.Body)
+		return string(body), resp.Header, err
 	}
 
-	return "", resp.Header, newRespError(requestId, resp.Header)
+	if body, err := ioutil.ReadAll(resp.Body); err == nil {
+		return "", resp.Header, errors.New(string(body))
+	} else {
+		return "", resp.Header, err
+	}
 }

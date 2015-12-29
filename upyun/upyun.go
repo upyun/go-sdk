@@ -19,31 +19,16 @@ const (
 	Version = "1.2.0"
 )
 
-// Auto: Auto detected, based on user's internet
-// Telecom: (ISP) China Telecom
-// Cnc:     (ISP) China Unicom
-// Ctt:     (ISP) China Tietong
-// purgeEndpoint: endpoint used for purging
-// Default(Min/Max)ChunkSize: set the buffer size when doing copy operation
-// defaultConnectTimeout: connection timeout when connect to upyun endpoint
 const (
-	Auto    = "v0.api.upyun.com"
-	Telecom = "v1.api.upyun.com"
-	Cnc     = "v2.api.upyun.com"
-	Ctt     = "v3.api.upyun.com"
-
-	purgeEndpoint = "purge.upyun.com"
-
-	defaultChunkSize      = 32 * 1024
+	// Default(Min/Max)ChunkSize: set the buffer size when doing copy operation
+	defaultChunkSize = 32 * 1024
+	// defaultConnectTimeout: connection timeout when connect to upyun endpoint
 	defaultConnectTimeout = 60
 )
 
 // chunkSize: chunk size when copy
 var (
 	chunkSize = defaultChunkSize
-	endpoints = [...]string{
-		Auto, Telecom, Cnc, Ctt,
-	}
 )
 
 // Util functions
@@ -178,26 +163,4 @@ func newFileInfo(arg interface{}) *FileInfo {
 		}
 		return &fileInfo
 	}
-}
-
-// Request Error
-type ReqError struct {
-	// UPYUN API Server Response Body
-	Msg string
-	// UPYUN API Server Response Header
-	Headers http.Header
-}
-
-func newRespError(body string, headers http.Header) *ReqError {
-	return &ReqError{
-		Msg:     body,
-		Headers: headers,
-	}
-}
-
-func (r *ReqError) Error() string {
-	if errCode, ok := r.Headers["X-Error-Code"]; ok {
-		return "X-Error-Code=" + errCode[0]
-	}
-	return fmt.Sprint(r.Msg)
 }

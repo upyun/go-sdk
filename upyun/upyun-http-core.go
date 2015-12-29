@@ -4,9 +4,22 @@ import (
 	"bytes"
 	"io"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"path/filepath"
 	"strconv"
+	"time"
+)
+
+// Auto: Auto detected, based on user's internet
+// Telecom: (ISP) China Telecom
+// Cnc:     (ISP) China Unicom
+// Ctt:     (ISP) China Tietong
+const (
+	Auto = iota
+	Telecom
+	Cnc
+	Ctt
 )
 
 type upYunHTTPCore struct {
@@ -14,11 +27,16 @@ type upYunHTTPCore struct {
 	httpClient *http.Client
 }
 
-// Set connect timeout
 func (core *upYunHTTPCore) SetTimeout(timeout int) {
 	core.httpClient = &http.Client{
 		Transport: &http.Transport{
-			Dial: timeoutDialer(timeout),
+			Dial: func(network, addr string) (c net.Conn, err error) {
+				c, err = net.DialTimeout(network, addr, time.Duration(timeout)*time.Second)
+				if err != nil {
+					return nil, err
+				}
+				return
+			},
 			// http://studygolang.com/articles/3138
 			DisableKeepAlives: true,
 		},
@@ -37,21 +55,17 @@ func (core *upYunHTTPCore) doFormRequest(url, policy, sign,
 		writer := multipart.NewWriter(body)
 		defer writer.Close()
 
+		var err error
+		var part io.Writer
+
 		writer.WriteField("policy", policy)
 		writer.WriteField("signature", sign)
-		// hack: filename is useless
-		part, err := writer.CreateFormFile("file", filepath.Base(fname))
-		if err != nil {
-			return err
+		if part, err = writer.CreateFormFile("file", filepath.Base(fname)); err == nil {
+			if _, err = chunkedCopy(part, fd); err == nil {
+				headers["Content-Type"] = writer.FormDataContentType()
+			}
 		}
-
-		if _, err = chunkedCopy(part, fd); err != nil {
-			return err
-		}
-
-		headers["Content-Type"] = writer.FormDataContentType()
-
-		return nil
+		return err
 	}()
 
 	if err != nil {

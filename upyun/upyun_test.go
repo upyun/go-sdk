@@ -1,238 +1,265 @@
 package upyun
 
 import (
+	"bytes"
 	"fmt"
 	"os"
-	"path"
 	"strings"
 	"testing"
 )
 
 var (
-	u              *UpYun
-	invalidAccount *UpYun
-	root           string
-	txtpath        string
-	imgpath        string
-	bufpath        string
+	username      = os.Getenv("UPYUN_USERNAME")
+	password      = os.Getenv("UPYUN_PASSWORD")
+	bucket        = os.Getenv("UPYUN_BUCKET")
+	apikey        = os.Getenv("UPYUN_APIKEY")
+	up            = NewUpYun(bucket, username, password)
+	upf           = NewUpYunForm(bucket, apikey)
+	ump           = NewUpYunMultiPart(bucket, apikey, 1024000)
+	upm           = NewUpYunMedia(bucket, username, password)
+	testPath      = "/gosdk"
+	upload        = "upyun-rest-api.go"
+	uploadInfo, _ = os.Lstat(upload)
+	uploadSize    = uploadInfo.Size()
+	download      = "/tmp/xxx.go"
+
+	err       error
+	fd        *os.File
+	upInfo    *FileInfo
+	upInfos   []*FileInfo
+	formResp  *FormAPIResp
+	mergeResp *MergeResp
 )
 
-const (
-	TXTPATH = "../tests/test.txt"
-	IMGPATH = "../tests/test.png"
-)
-
-func init() {
-	BUCKET := os.Getenv("UPYUN_BUCKET")
-	USERNAME := os.Getenv("UPYUN_USERNAME")
-	PASSWD := os.Getenv("UPYUN_PASSWORD")
-
-	if BUCKET == "" || USERNAME == "" || PASSWD == "" {
-		panic("Incomplete file bucket infomation in environment variable")
-	}
-
-	u = NewUpYun(BUCKET, USERNAME, PASSWD)
-	invalidAccount = NewUpYun("bucket", "username", "passwd")
-	root = "GoSDKTest"
-
-	err := u.Mkdir(root)
-	if err != nil {
-		panic(err)
-	}
-
-	// Upload test.txt to root dir
-	txtfi, err := os.Open(TXTPATH)
-	if err != nil {
-		panic(err)
-	}
-
-	txtpath = path.Join(root, "test.txt")
-	_, err = u.Put(txtpath, txtfi, false, "")
-	if err != nil {
-		panic(err)
-	}
-
-	txtfi.Close()
-
-	// Upload text.png to root dir
-	imgfi, err := os.Open(IMGPATH)
-	if err != nil {
-		panic(err)
-	}
-
-	imgpath = path.Join(root, "test.png")
-	_, err = u.Put(imgpath, imgfi, false, "")
-	if err != nil {
-		panic(err)
-	}
-
-	imgfi.Close()
-
-	// Upload string to root dir
-	buf := strings.NewReader("12345")
-	bufpath = path.Join(root, "buf")
-	_, err = u.Put(bufpath, buf, false, "")
-	if err != nil {
-		panic(err)
-	}
-
-}
-
-func assert(condition bool, log string, t *testing.T) {
-	if !condition {
-		t.Error(log)
+func TestUsage(t *testing.T) {
+	if _, err := up.Usage(); err != nil {
+		fmt.Println(err)
+		t.Errorf("failed to get Usage. %v", err)
 	}
 }
 
-func TestUpyun(t *testing.T) {
-	// Use it the right way
-
-	testUsage(t, u)
-	testGetList(t, u)
-	testLoopList(t, u)
-	testGetInfo(t, u)
-	testMkdir(t, u)
-	testGetFile(t, u)
-	testPutFile(t, u)
-	testDelete(t, u)
-
-	// Use it the wrong way to make it fail
-
-	testAuthFail(t, invalidAccount)
-}
-
-// -----------------------------------------------------------------------------------
-
-func testUsage(t *testing.T, client *UpYun) {
-	used, err := client.Usage()
-	assert(err == nil, "Usage: Get usage error", t)
-	assert(used > 0, "Usage: smaller than zero", t)
-
-	fmt.Println(used)
-}
-
-func testGetList(t *testing.T, client *UpYun) {
-	infoList, err := client.GetList(root)
-	assert(err == nil, "Get list error", t)
-
-	for _, info := range infoList {
-		if info.Name == "test.txt" {
-			assert(info.Type == "N", "GetList: wrong file type", t)
-			assert(info.Size == 10, "GetList: wrong file size", t)
+func TestSetEndpoint(t *testing.T) {
+	for _, ed := range []int{Telecom, Cnc, Ctt, Auto} {
+		if err = up.SetEndpoint(ed); err == nil {
+			_, err = up.Usage()
+		}
+		if err != nil {
+			t.Errorf("failed to SetEndpoint. %v", ed, err)
 		}
 	}
+	if err = up.SetEndpoint(5); err == nil {
+		t.Errorf("invalid SetEndpoint")
+	}
 }
 
-func testLoopList(t *testing.T, client *UpYun) {
-	var err error
-	iter := ""
+func TestMkdir(t *testing.T) {
+	if _, err = up.GetInfo(testPath); err == nil {
+		t.Error(testPath, "already exists")
+		//		t.Fail()
+	}
+	if err = up.Mkdir(testPath); err == nil {
+		_, err = up.GetInfo(testPath)
+	}
+	if err != nil {
+		t.Errorf("failed to Mkdir. %v", err)
+	}
+}
+
+func TestPut(t *testing.T) {
+	// put file
+	if fd, err = os.Open(upload); err != nil {
+		t.Skipf("failed to open %s %v", upload, err)
+	}
+
+	_, err = up.Put(testPath+"/"+upload, fd, false, "", "", nil)
+	if err != nil {
+		t.Errorf("failed to put %v", err)
+	}
+
+	fd, _ = os.Open(upload)
+	_, err = up.Put(testPath+"/dir2/"+upload, fd, true, "", "video/mp4", nil)
+	if err != nil {
+		t.Errorf("failed to put %v", err)
+	}
+
+	// put buf
+	b := bytes.NewReader([]byte("UPYUN GO SDK"))
+	_, err = up.Put(testPath+"/"+upload+".buf", b, false, "", "", nil)
+	if err != nil {
+		t.Errorf("failed to put %v", err)
+	}
+}
+
+func TestGet(t *testing.T) {
+	fd, err = os.OpenFile(download, os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0600)
+	if err != nil {
+		t.Skipf("failed to open %s %v", download, err)
+	}
+
+	defer os.Remove(download)
+
+	if err = up.Get(testPath+"/"+upload, fd); err != nil {
+		t.Errorf("failed to get %s %v", testPath+"/"+upload, err)
+	}
+
+	dInfo, _ := fd.Stat()
+	if dInfo.Size() != uploadSize {
+		t.Errorf("size not equal %d != %d", dInfo.Size, uploadSize)
+	}
+}
+
+func TestGetInfo(t *testing.T) {
+	if upInfo, err = up.GetInfo(testPath); err != nil {
+		t.Errorf("failed to GetInfo %s %v", testPath, err)
+	}
+	if upInfo.Type != "folder" {
+		t.Errorf("%s not folder", testPath)
+	}
+
+	if upInfo, err = up.GetInfo(testPath + "/" + upload); err != nil {
+		t.Errorf("failed to GetInfo %s %v", testPath+"/"+upload, err)
+	} else {
+		if upInfo.Type != "file" {
+			t.Errorf("%s not file", testPath+"/"+upload)
+		}
+		if upInfo.Size != uploadSize {
+			t.Errorf("size not equal %d != %d", upInfo.Size, uploadSize)
+		}
+	}
+
+	if upInfo, err = up.GetInfo(testPath + "/up"); upInfo != nil || err == nil {
+		t.Errorf("%s should not exist", testPath+"/up")
+	}
+}
+
+func TestGetList(t *testing.T) {
+	if upInfos, err = up.GetList(testPath); err != nil {
+		t.Errorf("failed to GetList %s %v", testPath, err)
+	}
+
+	if len(upInfos) != 3 {
+		t.Errorf("failed to GetList %s %d != 3", testPath, len(upInfos))
+	}
+}
+
+func TestGetLargeList(t *testing.T) {
+	ch := up.GetLargeList(testPath, false)
 	count := 0
 	for {
-		_, iter, err = client.LoopList(root, iter, 1)
-		assert(err == nil, "LoopList error", t)
-		count++
-		if iter == "" {
+		var more bool
+		upInfo, more = <-ch
+		if !more {
 			break
 		}
+		count++
 	}
-	assert(count > 1, "LoopList error: not list all", t)
-}
-
-func testGetInfo(t *testing.T, client *UpYun) {
-	fileInfo, err := client.GetInfo(txtpath)
-	assert(err == nil, "GetInfo error", t)
-	assert(fileInfo.Type == "file", "GetInfo: wrong type", t)
-	assert(fileInfo.Size == 10, "GetInfo: wrong size", t)
-
-	fileInfo, err = client.GetInfo(bufpath)
-	assert(err == nil, "GetInfo error", t)
-	assert(fileInfo.Type == "file", "GetInfo: wrong type", t)
-	assert(fileInfo.Size == 5, "GetInfo: wrong size", t)
-}
-
-func testMkdir(t *testing.T, client *UpYun) {
-	fileInfo, err := client.GetInfo(root)
-	assert(err == nil, "Mkdir: dir not exist", t)
-	assert(fileInfo.Type == "folder", "Mkdir: wrong dir type", t)
-}
-
-func testGetFile(t *testing.T, client *UpYun) {
-	txtfo, err := os.Create("get.txt")
-	if err != nil {
-		panic(err)
+	if count != 3 {
+		t.Errorf("GetLargeList %d != 3", count)
 	}
 
-	imgfo, err := os.Create("get.png")
-	if err != nil {
-		panic(err)
-	}
-
-	defer func() {
-		err := txtfo.Close()
-		if err != nil {
-			panic(err)
+	ch = up.GetLargeList(testPath, true)
+	count = 0
+	for {
+		var more bool
+		upInfo, more = <-ch
+		if !more {
+			break
 		}
-		os.Remove("get.txt")
-
-		err = imgfo.Close()
-		if err != nil {
-			panic(err)
-		}
-		os.Remove("get.png")
-	}()
-
-	err = client.Get(txtpath, txtfo)
-	assert(err == nil, "Get: get txt error", t)
-
-	err = client.Get(imgpath, imgfo)
-	assert(err == nil, "Get: get img error", t)
-
-	stat, _ := txtfo.Stat()
-	assert(stat.Size() == 10, "Get: get txt size error", t)
-
-	stat, _ = imgfo.Stat()
-	assert(stat.Size() == 13001, "Get: get img size error", t)
-}
-
-func testPutFile(t *testing.T, client *UpYun) {
-	txtinfo, err := client.GetInfo(txtpath)
-	assert(err == nil, "Put: put txt error", t)
-	assert(txtinfo.Size == 10, "Put: put txt size error", t)
-	assert(txtinfo.Type == "file", "Put: put txt type error", t)
-
-	imgfi, err := os.Open(IMGPATH)
-	if err != nil {
-		panic(err)
+		count++
 	}
-	_, err = client.Put(imgpath, imgfi, true, "")
-	imgfi.Close()
-
-	imginfo, err := client.GetInfo(imgpath)
-	assert(err == nil, "Put: put img error", t)
-	assert(imginfo.Size == 13001, "Put: put img size error", t)
-	assert(imginfo.Type == "file", "Put: put img type error", t)
-
+	if count != 4 {
+		t.Errorf("GetLargeList recursive %d != 4", count)
+	}
 }
 
-func testDelete(t *testing.T, client *UpYun) {
-	err := client.Delete(txtpath)
-	assert(err == nil, "Delete: delete txt error", t)
+func TestDelete(t *testing.T) {
+	// delete file
+	path := testPath + "/" + upload
+	if err = up.Delete(path); err != nil {
+		t.Errorf("failed to Delete %s %v", path, err)
+	}
 
-	err = client.Delete(imgpath)
-	assert(err == nil, "Delete: delete img error", t)
+	path = testPath + "/" + upload + ".buf"
+	if err = up.Delete(path); err != nil {
+		t.Errorf("failed to Delete %s %v", path, err)
+	}
 
-	err = client.Delete(bufpath)
-	assert(err == nil, "Delete: delete buf error", t)
+	path = testPath + "/dir2/" + upload
+	if err = up.Delete(path); err != nil {
+		t.Errorf("failed to Delete %s %v", path, err)
+	}
 
-	err = client.Delete(root)
-	fmt.Println(err)
-	assert(err == nil, "Delete: delete folder error", t)
+	// delete not empty folder
+	path = testPath
+	if err = up.Delete(path); err == nil {
+		t.Errorf("Delete no-empty folder should failed %s", path)
+	}
+	// delete empty folder
+	path = testPath + "/dir2"
+	if err = up.Delete(path); err != nil {
+		t.Errorf("failed to Delete empty folder %s %v", path, err)
+	}
+
+	path = testPath
+	if err = up.Delete(path); err != nil {
+		t.Errorf("failed to Delete empty folder %s %v", path, err)
+	}
 }
 
-// -----------------------------------------------------------------------------------
+func TestPurge(t *testing.T) {
+	var s string
+	s, err = up.Purge([]string{"http://www.baidu.com",
+		fmt.Sprintf("http://%s.b0.upaiyun.com/%s", up.Bucket, testPath+"/"+upload)})
+	if err != nil {
+		t.Errorf("failed to Purge %v", err)
+	}
 
-func testAuthFail(t *testing.T, client *UpYun) {
-	if _, err := client.Usage(); err != nil {
-		assert(strings.Contains(err.Error(), "401 Unauthorized"), "testAuthFail error", t)
+	if s != "http://www.baidu.com" {
+		t.Errorf("%s != baidu", s)
+	}
+}
+
+func TestFormAPI(t *testing.T) {
+	formResp, err = upf.Put(upload,
+		testPath+"/upload_{filename}{.suffix}", 3600, nil)
+	if err != nil {
+		t.Errorf("failed to put %s %v", upload, err)
+		return
+	}
+	if err = up.Delete(formResp.Url); err == nil {
+		err = up.Delete(testPath)
+	}
+	if err != nil {
+		t.Errorf("failed to remove %s %v", formResp.Url, err)
+	}
+}
+
+func TestMultiPart(t *testing.T) {
+	mergeResp, err = ump.Put(upload, testPath+"/multipart", 3600, nil)
+	if err != nil {
+		t.Errorf("failed to put %s %v", upload, err)
+	}
+
+	if err = up.Delete(mergeResp.Path); err == nil {
+		err = up.Delete(testPath)
+	}
+	if err != nil {
+		t.Errorf("failed to remove %s %v", mergeResp.Path, err)
+	}
+}
+
+func TestMedia(t *testing.T) {
+	task := map[string]interface{}{
+		"type":         "thumbnail",
+		"thumb_single": true,
+	}
+	tasks := []map[string]interface{}{task}
+
+	if ids, err := upm.PostTasks("kai.3gp", "http://www.upyun.com/notify", tasks); err != nil {
+		t.Errorf("failed to post tasks %v %v", tasks, err)
+	} else {
+		if _, err = upm.GetProgress(strings.Join(ids, ",")); err != nil {
+			t.Errorf("failed to get progress %v %v", ids, err)
+		}
 	}
 }

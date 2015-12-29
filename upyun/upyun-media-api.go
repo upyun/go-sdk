@@ -98,7 +98,7 @@ func (upm *UpYunMedia) PostTasks(src, notify string,
 		return ids, err
 	}
 
-	return nil, newRespError(string(buf), resp.Header)
+	return nil, errors.New(string(buf))
 }
 
 // Get Task Progress
@@ -125,7 +125,7 @@ func (upm *UpYunMedia) GetProgress(task_ids string) (*MediaStatusResp, error) {
 		return &status, nil
 	}
 
-	return nil, newRespError(string(buf), resp.Header)
+	return nil, errors.New(string(buf))
 }
 
 func (upm *UpYunMedia) doMediaRequest(method, path string,

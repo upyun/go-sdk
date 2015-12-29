@@ -147,7 +147,7 @@ func (ump *UpYunMultiPart) InitUpload(key string, value *os.File,
 		return body, err
 	}
 
-	return nil, newRespError(string(body), resp.Header)
+	return nil, errors.New(string(body))
 }
 
 // UploadBlock uploads a block
@@ -201,7 +201,7 @@ func (ump *UpYunMultiPart) UploadBlock(fd *os.File, bindex int, expire int64,
 		return body, err
 	}
 
-	return nil, newRespError(string(body), resp.Header)
+	return nil, errors.New(string(body))
 }
 
 // MergeBlock posts a merge request to merge all blocks uploaded
@@ -240,19 +240,19 @@ func (ump *UpYunMultiPart) MergeBlock(saveToken, secret string,
 		return body, err
 	}
 
-	return nil, newRespError(string(body), resp.Header)
+	return nil, errors.New(string(body))
 }
 
 // Put uploads a file through UPYUN MultiPart Upload API
-func (ump *UpYunMultiPart) Put(key, fpath string,
-	expire int64, options map[string]interface{}) (*MergeResp, error) {
+func (ump *UpYunMultiPart) Put(fpath, saveas string,
+	expireAfter int64, options map[string]interface{}) (*MergeResp, error) {
 	fd, err := os.Open(fpath)
 	if err != nil {
 		return nil, err
 	}
 	defer fd.Close()
 
-	rdata, err := ump.InitUpload(key, fd, expire, options)
+	rdata, err := ump.InitUpload(saveas, fd, expireAfter, options)
 	if err != nil {
 		return nil, errors.New("failed to init upload." + err.Error())
 	}
@@ -269,7 +269,7 @@ func (ump *UpYunMultiPart) Put(key, fpath string,
 		ok := 0
 		for idx, _ := range status {
 			if status[idx] == 0 {
-				_, err = ump.UploadBlock(fd, idx, expire, fpath, saveToken, secret)
+				_, err = ump.UploadBlock(fd, idx, expireAfter, fpath, saveToken, secret)
 				if err != nil {
 					break
 				}
@@ -287,7 +287,7 @@ func (ump *UpYunMultiPart) Put(key, fpath string,
 		}
 	}
 
-	data, err := ump.MergeBlock(saveToken, secret, expire)
+	data, err := ump.MergeBlock(saveToken, secret, expireAfter)
 	if err != nil {
 		return nil, errors.New("failed to merge blocks." + err.Error())
 	}
