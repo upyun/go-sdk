@@ -1,3 +1,9 @@
+# UPYUN Go SDK
+
+    import "github.com/polym/go-sdk/upyun"
+
+UPYUN Go SDK, 集成 [UPYUN HTTP REST 接口](http://docs.upyun.com/api/rest_api/)，[UPYUN HTTP FORM 接口](http://docs.upyun.com/api/form_api/)，[分块上传](http://docs.upyun.com/api/multipart_upload/) 和 [视频处理接口](http://docs.upyun.com/api/av_pretreatment/)
+
 Table of Contents
 =================
 
@@ -34,12 +40,6 @@ Table of Contents
         * [初始化 UpYunMedia](#初始化-upyunmedia)
         * [提交任务](#提交任务)
         * [查询进度](#查询进度)
-
-# UPYUN Go SDK
-
-    import "github.com/polym/go-sdk/upyun"
-
-UPYUN Go SDK, 集成 [UPYUN HTTP REST 接口](http://docs.upyun.com/api/rest_api/)，[UPYUN HTTP FORM 接口](http://docs.upyun.com/api/form_api/)，[分块上传](http://docs.upyun.com/api/multipart_upload/) 和 [视频处理接口](http://docs.upyun.com/api/av_pretreatment/)
 
 ## Example
 
