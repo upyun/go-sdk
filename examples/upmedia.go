@@ -3,7 +3,7 @@ package main
 import (
 	config "./config"
 	"fmt"
-	"github.com/polym/go-sdk/upyun"
+	"github.com/upyun/go-sdk/upyun"
 	"strings"
 	"time"
 )
@@ -12,14 +12,12 @@ func main() {
 	upm := upyun.NewUpYunMedia(config.Bucket, config.Username, config.Passwd)
 
 	task := map[string]interface{}{
-		"type":        "video",
-		"format":      "flv",
-		"audio_codec": "copy",
-		"video_codec": "copy",
+		"type":         "thumbnail",
+		"thumb_single": true,
 	}
 	tasks := []map[string]interface{}{task}
 
-	ids, _ := upm.PostTasks("sugar.mkv", config.Notify, tasks)
+	ids, _ := upm.PostTasks("kai.3gp", config.Notify, tasks)
 
 	for {
 		status, _ := upm.GetProgress(strings.Join(ids, ","))

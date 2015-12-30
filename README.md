@@ -4,7 +4,12 @@
 
     import "github.com/upyun/go-sdk/upyun"
 
-UPYUN Go SDK, 集成 [UPYUN HTTP REST 接口](http://docs.upyun.com/api/rest_api/)，[UPYUN HTTP FORM 接口](http://docs.upyun.com/api/form_api/)，[UPYUN 刷新接口](http://docs.upyun.com/api/purge/)，[分块上传](http://docs.upyun.com/api/multipart_upload/) 和 [视频处理接口](http://docs.upyun.com/api/av_pretreatment/) 
+UPYUN Go SDK, 集成：
+- [UPYUN HTTP REST 接口](http://docs.upyun.com/api/rest_api/)
+- [UPYUN HTTP FORM 接口](http://docs.upyun.com/api/form_api/)
+- [UPYUN 缓存刷新接口](http://docs.upyun.com/api/purge/)
+- [UPYUN 分块上传接口](http://docs.upyun.com/api/multipart_upload/)
+- [UPYUN 视频处理接口](http://docs.upyun.com/api/av_pretreatment/)
 
 Table of Contents
 =================
@@ -23,7 +28,7 @@ Table of Contents
         * [删除](#删除)
         * [获取文件信息](#获取文件信息)
         * [获取文件列表](#获取文件列表)
-      * [UPYUN 刷新接口](#upyun-刷新接口)
+      * [UPYUN 缓存刷新接口](#upyun-缓存刷新接口)
       * [UPYUN HTTP 表单上传接口](#upyun-http-表单上传接口)
         * [UpYunForm](#upyunform)
         * [初始化 UpYunForm](#初始化-upyunform)
@@ -45,7 +50,7 @@ Table of Contents
 
 ## Examples
 
-详细例子，可以查看 `upyun/example/`
+示例代码见 `examples/`。
 
 ## Usage
 
@@ -55,7 +60,7 @@ Table of Contents
 
 ```go
 type UpYun struct {
-    Bucket    string    // 空间名
+    Bucket    string    // 空间名（即服务名称）
     Username  string    // 操作员
     Passwd    string    // 密码
     ChunkSize int       // 块读取大小, 默认32KB
@@ -104,7 +109,7 @@ func (u *UpYun) Put(key string, value io.Reader, useMD5 bool, secret, contentTyp
         headers map[string]string) (http.Header, error)
 ```
 
-`key` 为 UPYUN 上的存储路径，`value` 既可以是文件，也可以是 `buffer`，`contentType` 自定义上传内容类型，`headers` 自定义上传参数
+`key` 为 UPYUN 上的存储路径，`value` 既可以是文件，也可以是 `buffer`，`contentType` 自定义上传内容类型，`headers` 自定义上传参数。
 
 #### 下载
 
@@ -141,11 +146,11 @@ func (u *UpYun) GetList(key string) ([]*FileInfo, error)
 func (u *UpYun) GetLargeList(key string, recursive bool) chan *FileInfo
 ```
 
-`key` 必须为目录。对于目录下有大量文件的，建议使用 `GetLargeList`
+`key` 必须为目录。对于目录下有大量文件的，建议使用 `GetLargeList`。
 
 ---
 
-### UPYUN 刷新接口
+### UPYUN 缓存刷新接口
 
 ```go
 func (u *UpYun) Purge(urls []string) (string, error)
@@ -160,7 +165,7 @@ func (u *UpYun) Purge(urls []string) (string, error)
 ```go
 type UpYunForm struct {
     Secret    string    // 表单密钥
-    Bucket    string    // 空间名
+    Bucket    string    // 空间名（即服务名称）
 }
 ```
 
@@ -199,7 +204,7 @@ func (uf *UpYunForm) Put(fpath, saveas string, expireAfter int64,
     options map[string]string) (*FormAPIResp, error)
 ```
 
-`fpath` 上传文件名，`saveas` UPYUN 存储保存路径，`expireAfter` 过期时间长度，`options` 上传参数
+`fpath` 上传文件名，`saveas` UPYUN 存储保存路径，`expireAfter` 过期时间长度，`options` 上传参数。
 
 ---
 
@@ -209,9 +214,9 @@ func (uf *UpYunForm) Put(fpath, saveas string, expireAfter int64,
 
 ```go
 type UpYunMultiPart struct {
-    Bucket    string        // 空间名
+    Bucket    string        // 空间名（即服务名称）
     Secret    string        // 表单密钥
-    BlockSize int64         // 分块大小, 建议 1024000
+    BlockSize int64         // 分块大小，单位字节, 建议 1024000
 }
 ```
 
@@ -268,9 +273,9 @@ func (ump *UpYunMultiPart) Put(fpath, saveas string,
 
 ```go
 type UpYunMedia struct {
-    Username string
-    Passwd   string
-    Bucket   string
+    Username  string    // 操作员
+    Passwd    string    // 密码
+    Bucket    string    // 空间名（即服务名称）
 }
 ```
 
@@ -295,8 +300,7 @@ func (upm *UpYunMedia) PostTasks(src, notify string,
     tasks []map[string]interface{}) ([]string, error)
 ```
 
-`src` 音视频文件 UPYUN 存储路径，`notify` 回调URL，`tasks` 任务列表.
-返回任务 id 列表
+`src` 音视频文件 UPYUN 存储路径，`notify` 回调URL，`tasks` 任务列表，返回结果为任务 id 列表。
 
 #### 查询进度
 
@@ -304,4 +308,4 @@ func (upm *UpYunMedia) PostTasks(src, notify string,
 func (upm *UpYunMedia) GetProgress(task_ids string) (*MediaStatusResp, error)
 ```
 
-`task_ids` 是多个 `task_id` 用 `,` 连接起来
+`task_ids` 是多个 `task_id` 用 `,` 连接起来。

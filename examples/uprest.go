@@ -4,7 +4,7 @@ package main
 import (
 	config "./config"
 	"fmt"
-	"github.com/polym/go-sdk/upyun"
+	"github.com/upyun/go-sdk/upyun"
 	"os"
 	"time"
 )
@@ -21,10 +21,10 @@ func main() {
 		"x-gmkerl-watermark-margin": "10,10",
 	}
 
-	fd, _ := os.Open("example/cc.jpg")
+	fd, _ := os.Open("cc.jpg")
 	x := fmt.Sprintf("/wm/cc%d.jpg", time.Now().Unix()%10000)
 	fmt.Println(up.Put(x, fd, false, "", "", headers))
-	fmt.Printf("http://bigfile.b0.upaiyun.com%s\n", x)
+
 	c := up.GetLargeList("/", true)
 	for {
 		fmt.Println(<-c)
