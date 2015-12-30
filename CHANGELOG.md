@@ -1,6 +1,6 @@
 # UPYUN Go SDK ChangeLog
 
-## Version 1.2.0
+## Version 2.0.0 (2015.12.30)
 
 ### features
 
