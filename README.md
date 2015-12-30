@@ -4,10 +4,10 @@
 
     import "github.com/upyun/go-sdk/upyun"
 
-UPYUN Go SDK, 集成
+UPYUN Go SDK, 集成：
 - [UPYUN HTTP REST 接口](http://docs.upyun.com/api/rest_api/)
 - [UPYUN HTTP FORM 接口](http://docs.upyun.com/api/form_api/)
-- [UPYUN 刷新接口](http://docs.upyun.com/api/purge/)
+- [UPYUN 缓存刷新接口](http://docs.upyun.com/api/purge/)
 - [UPYUN 分块上传接口](http://docs.upyun.com/api/multipart_upload/)
 - [UPYUN 视频处理接口](http://docs.upyun.com/api/av_pretreatment/)
 
@@ -28,7 +28,7 @@ Table of Contents
         * [删除](#删除)
         * [获取文件信息](#获取文件信息)
         * [获取文件列表](#获取文件列表)
-      * [UPYUN 刷新接口](#upyun-刷新接口)
+      * [UPYUN 缓存刷新接口](#upyun-缓存刷新接口)
       * [UPYUN HTTP 表单上传接口](#upyun-http-表单上传接口)
         * [UpYunForm](#upyunform)
         * [初始化 UpYunForm](#初始化-upyunform)
@@ -50,7 +50,7 @@ Table of Contents
 
 ## Examples
 
-示例代码见 `upyun/example/`。
+示例代码见 `examples/`。
 
 ## Usage
 
@@ -150,7 +150,7 @@ func (u *UpYun) GetLargeList(key string, recursive bool) chan *FileInfo
 
 ---
 
-### UPYUN 刷新接口
+### UPYUN 缓存刷新接口
 
 ```go
 func (u *UpYun) Purge(urls []string) (string, error)
