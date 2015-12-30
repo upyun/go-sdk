@@ -10,7 +10,8 @@ Table of Contents
 =================
 
   * [UPYUN Go SDK](#upyun-go-sdk)
-    * [Example](#example)
+  * [Table of Contents](#table-of-contents)
+    * [Examples](#examples)
     * [Usage](#usage)
       * [UPYUN HTTP REST 接口](#upyun-http-rest-接口)
         * [UpYun](#upyun)
@@ -23,7 +24,7 @@ Table of Contents
         * [删除](#删除)
         * [获取文件信息](#获取文件信息)
         * [获取文件列表](#获取文件列表)
-        * [刷新接口](#刷新接口)
+      * [UPYUN 刷新接口](#upyun-刷新接口)
       * [UPYUN HTTP 表单上传接口](#upyun-http-表单上传接口)
         * [UpYunForm](#upyunform)
         * [初始化 UpYunForm](#初始化-upyunform)
@@ -43,9 +44,9 @@ Table of Contents
         * [提交任务](#提交任务)
         * [查询进度](#查询进度)
 
-## Example
+## Examples
 
-详细例子，可以查看 upyun/example/
+详细例子，可以查看 `upyun/example/`
 
 ## Usage
 
@@ -101,7 +102,7 @@ func (u *UpYun) Mkdir(key string) error
 
 ```go
 func (u *UpYun) Put(key string, value io.Reader, useMD5 bool, secret, contentType string,
-        headers map[string]string) (http.Header, error) {
+        headers map[string]string) (http.Header, error)
 ```
 
 `key` 为 UPYUN 上的存储路径，`value` 既可以是文件，也可以是 `buffer`，`contentType` 自定义上传内容类型，`headers` 自定义上传参数
@@ -143,7 +144,9 @@ func (u *UpYun) GetLargeList(key string, recursive bool) chan *FileInfo
 
 `key` 必须为目录。对于目录下有大量文件的，建议使用 `GetLargeList`
 
-#### 刷新接口
+---
+
+### UPYUN 刷新接口
 
 ```go
 func (u *UpYun) Purge(urls []string) (string, error)
@@ -158,7 +161,7 @@ func (u *UpYun) Purge(urls []string) (string, error)
 ```go
 type UpYunForm struct {
     Secret    string    // 表单密钥
-    Bucket string       // 空间名
+    Bucket    string    // 空间名
 }
 ```
 

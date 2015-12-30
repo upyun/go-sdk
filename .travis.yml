@@ -1,12 +1,12 @@
 language: go
 
 go:
-  - 1.3
-  - 1.4
-  - 1.5
+    - 1.3
+    - 1.4
+    - 1.5
 
 install:
-  - go get github.com/upyun/go-sdk/upyun
+    - go get github.com/upyun/go-sdk/upyun
 
 script:
-  - cd upyun && go test
+    - cd upyun && go test -v
