@@ -1,5 +1,13 @@
 # UPYUN Go SDK ChangeLog
 
+## Version 1.2.0
+
+### features
+
+1. restruct go sdk
+2. add multipart upload and media api
+3. add GetLargeList in REST api
+
 ## Version 1.1.0
 
 date: 2015.06.10
