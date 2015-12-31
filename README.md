@@ -16,6 +16,7 @@ Table of Contents
 
   * [UPYUN Go SDK](#upyun-go-sdk)
     * [Examples](#examples)
+    * [Projects using this SDK](#projects-using-this-sdk)
     * [Usage](#usage)
       * [UPYUN HTTP REST 接口](#upyun-http-rest-接口)
         * [UpYun](#upyun)
@@ -51,6 +52,10 @@ Table of Contents
 ## Examples
 
 示例代码见 `examples/`。
+
+## Projects using this SDK
+
+- [UPYUN Command Tool](https://github.com/polym/upx) by [polym](https://github.com/polym)
 
 ## Usage
 
