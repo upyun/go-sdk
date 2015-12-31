@@ -211,12 +211,12 @@ func (u *UpYun) GetLargeList(key string, recursive bool) chan *FileInfo {
 		var listDir func(k string)
 		listDir = func(k string) {
 			iter := ""
-			limit := 100
+			limit := 50
 			for {
 				var niter string
 				infos, niter, err = u.loopList(k, iter, limit)
 				if err != nil {
-					continue
+					return
 				}
 				iter = niter
 				for _, f := range infos {
@@ -382,6 +382,9 @@ func (u *UpYun) doRESTRequest(method, uri string, headers map[string]string,
 	}
 
 	if body, err := ioutil.ReadAll(resp.Body); err == nil {
+		if len(body) == 0 && resp.StatusCode/100 != 2 {
+			return "", resp.Header, errors.New(fmt.Sprint(resp.StatusCode))
+		}
 		return "", resp.Header, errors.New(string(body))
 	} else {
 		return "", resp.Header, err
