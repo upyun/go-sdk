@@ -38,7 +38,7 @@ func (core *upYunHTTPCore) SetTimeout(timeout int) {
 				return
 			},
 			// http://studygolang.com/articles/3138
-			DisableKeepAlives: true,
+			// DisableKeepAlives: true,
 		},
 	}
 }
