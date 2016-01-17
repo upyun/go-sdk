@@ -91,75 +91,51 @@ func (u *UpYun) Mkdir(key string) error {
 }
 
 // Put uploads filelike object to UPYUN File System
-func (u *UpYun) Put(key string, value io.Reader, useMD5 bool, secret, contentType string,
+func (u *UpYun) Put(key string, value io.Reader, useMD5 bool,
 	headers map[string]string) (http.Header, error) {
 	if headers == nil {
 		headers = make(map[string]string)
 	}
 
-	headers["mkdir"] = "true"
-
-	// Content-Type
-	if contentType != "" {
-		headers["Content-Type"] = contentType
+	if _, ok := headers["Content-Length"]; !ok {
+		switch v := value.(type) {
+		case *os.File:
+			if fileInfo, err := v.Stat(); err != nil {
+				return nil, err
+			} else {
+				headers["Content-Length"] = fmt.Sprint(fileInfo.Size())
+			}
+		default:
+			// max buffer is 10k
+			rw := bytes.NewBuffer(make([]byte, 0, 10240))
+			if n, err := io.Copy(rw, value); err != nil {
+				return nil, err
+			} else {
+				headers["Content-Length"] = fmt.Sprint(n)
+			}
+			value = rw
+		}
 	}
 
-	// secret
-	if secret != "" {
-		headers["Content-Secret"] = secret
-	}
-
-	// Get Content length
-
-	/// if is file
-	switch v := value.(type) {
-	case *os.File:
-		if useMD5 {
+	if _, ok := headers["Content-MD5"]; !ok && useMD5 {
+		switch v := value.(type) {
+		case *os.File:
 			hash := md5.New()
-
-			_, err := chunkedCopy(hash, value)
-			if err != nil {
+			if _, err := io.Copy(hash, value); err != nil {
 				return nil, err
 			}
 
 			headers["Content-MD5"] = fmt.Sprintf("%x", hash.Sum(nil))
 
-			// seek to origin of file
-			_, err = v.Seek(0, 0)
-			if err != nil {
+			if _, err := v.Seek(0, 0); err != nil {
 				return nil, err
 			}
 		}
-
-		fileInfo, err := v.Stat()
-		if err != nil {
-			return nil, err
-		}
-
-		headers["Content-Length"] = strconv.FormatInt(fileInfo.Size(), 10)
-
-		_, rtHeaders, err := u.doRESTRequest("PUT", key, "", headers, value)
-
-		return rtHeaders, err
-
-	case io.Reader:
-		buf, err := ioutil.ReadAll(v)
-		if err != nil {
-			return nil, err
-		}
-
-		headers["Content-Length"] = strconv.Itoa(len(buf))
-
-		if useMD5 {
-			headers["Content-MD5"] = fmt.Sprintf("%x", md5.Sum(buf))
-		}
-
-		_, rtHeaders, err := u.doRESTRequest("PUT", key, "", headers, bytes.NewReader(buf))
-
-		return rtHeaders, err
 	}
 
-	return nil, errors.New("Invalid Reader")
+	_, rtHeaders, err := u.doRESTRequest("PUT", key, "", headers, value)
+
+	return rtHeaders, err
 }
 
 // Get gets the specified file in UPYUN File System
