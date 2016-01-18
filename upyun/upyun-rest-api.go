@@ -56,8 +56,7 @@ func (u *UpYun) SetEndpoint(ed int) error {
 
 // make UpYun REST Authorization
 func (u *UpYun) makeRESTAuth(method, uri, date, lengthStr string) string {
-	raw, _ := URL.ParseRequestURI(uri)
-	sign := []string{method, raw.String(), date, lengthStr, md5Str(u.Passwd)}
+	sign := []string{method, uri, date, lengthStr, md5Str(u.Passwd)}
 
 	return "UpYun " + u.Username + ":" + md5Str(strings.Join(sign, "&"))
 }
@@ -71,7 +70,7 @@ func (u *UpYun) makePurgeAuth(purgeList, date string) string {
 
 // Usage gets the usage of the bucket in UPYUN File System
 func (u *UpYun) Usage() (int64, error) {
-	result, _, err := u.doRESTRequest("GET", "/?usage", nil, nil)
+	result, _, err := u.doRESTRequest("GET", "/", "usage", nil, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -86,93 +85,69 @@ func (u *UpYun) Mkdir(key string) error {
 	headers["mkdir"] = "true"
 	headers["folder"] = "true"
 
-	_, _, err := u.doRESTRequest("POST", key, headers, nil)
+	_, _, err := u.doRESTRequest("POST", key, "", headers, nil)
 
 	return err
 }
 
 // Put uploads filelike object to UPYUN File System
-func (u *UpYun) Put(key string, value io.Reader, useMD5 bool, secret, contentType string,
+func (u *UpYun) Put(key string, value io.Reader, useMD5 bool,
 	headers map[string]string) (http.Header, error) {
 	if headers == nil {
 		headers = make(map[string]string)
 	}
 
-	headers["mkdir"] = "true"
-
-	// Content-Type
-	if contentType != "" {
-		headers["Content-Type"] = contentType
+	if _, ok := headers["Content-Length"]; !ok {
+		switch v := value.(type) {
+		case *os.File:
+			if fileInfo, err := v.Stat(); err != nil {
+				return nil, err
+			} else {
+				headers["Content-Length"] = fmt.Sprint(fileInfo.Size())
+			}
+		default:
+			// max buffer is 10k
+			rw := bytes.NewBuffer(make([]byte, 0, 10240))
+			if n, err := io.Copy(rw, value); err != nil {
+				return nil, err
+			} else {
+				headers["Content-Length"] = fmt.Sprint(n)
+			}
+			value = rw
+		}
 	}
 
-	// secret
-	if secret != "" {
-		headers["Content-Secret"] = secret
-	}
-
-	// Get Content length
-
-	/// if is file
-	switch v := value.(type) {
-	case *os.File:
-		if useMD5 {
+	if _, ok := headers["Content-MD5"]; !ok && useMD5 {
+		switch v := value.(type) {
+		case *os.File:
 			hash := md5.New()
-
-			_, err := chunkedCopy(hash, value)
-			if err != nil {
+			if _, err := io.Copy(hash, value); err != nil {
 				return nil, err
 			}
 
 			headers["Content-MD5"] = fmt.Sprintf("%x", hash.Sum(nil))
 
-			// seek to origin of file
-			_, err = v.Seek(0, 0)
-			if err != nil {
+			if _, err := v.Seek(0, 0); err != nil {
 				return nil, err
 			}
 		}
-
-		fileInfo, err := v.Stat()
-		if err != nil {
-			return nil, err
-		}
-
-		headers["Content-Length"] = strconv.FormatInt(fileInfo.Size(), 10)
-
-		_, rtHeaders, err := u.doRESTRequest("PUT", key, headers, value)
-
-		return rtHeaders, err
-
-	case io.Reader:
-		buf, err := ioutil.ReadAll(v)
-		if err != nil {
-			return nil, err
-		}
-
-		headers["Content-Length"] = strconv.Itoa(len(buf))
-
-		if useMD5 {
-			headers["Content-MD5"] = fmt.Sprintf("%x", md5.Sum(buf))
-		}
-
-		_, rtHeaders, err := u.doRESTRequest("PUT", key, headers, bytes.NewReader(buf))
-
-		return rtHeaders, err
 	}
 
-	return nil, errors.New("Invalid Reader")
+	_, rtHeaders, err := u.doRESTRequest("PUT", key, "", headers, value)
+
+	return rtHeaders, err
 }
 
 // Get gets the specified file in UPYUN File System
 func (u *UpYun) Get(key string, value io.Writer) error {
-	_, _, err := u.doRESTRequest("GET", key, nil, value)
+	_, _, err := u.doRESTRequest("GET", key, "", nil, value)
 
 	return err
 }
 
 // Delete deletes the specified **file** in UPYUN File System.
 func (u *UpYun) Delete(key string) error {
-	_, _, err := u.doRESTRequest("DELETE", key, nil, nil)
+	_, _, err := u.doRESTRequest("DELETE", key, "", nil, nil)
 
 	return err
 }
@@ -180,7 +155,7 @@ func (u *UpYun) Delete(key string) error {
 // GetList lists items in key. The number of items must be
 // less then 100
 func (u *UpYun) GetList(key string) ([]*FileInfo, error) {
-	ret, _, err := u.doRESTRequest("GET", key, nil, nil)
+	ret, _, err := u.doRESTRequest("GET", key, "", nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -256,7 +231,7 @@ func (u *UpYun) loopList(key, iter string, limit int) ([]*FileInfo, string, erro
 		headers["X-List-Iter"] = iter
 	}
 
-	ret, rtHeaders, err := u.doRESTRequest("GET", key, headers, nil)
+	ret, rtHeaders, err := u.doRESTRequest("GET", key, "", headers, nil)
 	if err != nil {
 		return nil, "", err
 	}
@@ -287,7 +262,7 @@ func (u *UpYun) loopList(key, iter string, limit int) ([]*FileInfo, string, erro
 
 // GetInfo gets information of item in UPYUN File System
 func (u *UpYun) GetInfo(key string) (*FileInfo, error) {
-	_, headers, err := u.doRESTRequest("HEAD", key, nil, nil)
+	_, headers, err := u.doRESTRequest("HEAD", key, "", nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -333,7 +308,7 @@ func (u *UpYun) Purge(urls []string) (string, error) {
 	return "", errors.New(string(content))
 }
 
-func (u *UpYun) doRESTRequest(method, uri string, headers map[string]string,
+func (u *UpYun) doRESTRequest(method, uri, query string, headers map[string]string,
 	value interface{}) (result string, rtHeaders http.Header, err error) {
 	if headers == nil {
 		headers = make(map[string]string)
@@ -344,8 +319,13 @@ func (u *UpYun) doRESTRequest(method, uri string, headers map[string]string,
 		uri = "/" + uri
 	}
 
-	uri = "/" + u.Bucket + uri
+	uri = escapeURI("/" + u.Bucket + uri)
 	url := fmt.Sprintf("http://%s%s", u.endpoint, uri)
+
+	if query != "" {
+		query = escapeURI(query)
+		url += "?" + query
+	}
 
 	// date
 	date := genRFC1123Date()

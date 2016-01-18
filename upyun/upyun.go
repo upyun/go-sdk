@@ -10,6 +10,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	URL "net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -56,6 +57,13 @@ func base64Str(b []byte) string {
 // URL encode
 func encodeURL(uri string) string {
 	return base64.URLEncoding.EncodeToString([]byte(uri))
+}
+
+// URI escape
+func escapeURI(uri string) string {
+	Uri := URL.URL{}
+	Uri.Path = uri
+	return Uri.String()
 }
 
 func md5sum(fd io.Reader) (string, int64, error) {

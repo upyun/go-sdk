@@ -71,20 +71,20 @@ func TestPut(t *testing.T) {
 		t.Skipf("failed to open %s %v", upload, err)
 	}
 
-	_, err = up.Put(testPath+"/"+upload, fd, false, "", "", nil)
+	_, err = up.Put(testPath+"/"+upload, fd, false, nil)
 	if err != nil {
 		t.Errorf("failed to put %v", err)
 	}
 
 	fd, _ = os.Open(upload)
-	_, err = up.Put(testPath+"/dir2/"+upload, fd, true, "", "video/mp4", nil)
+	_, err = up.Put(testPath+"/dir2/"+upload, fd, true, map[string]string{"Content-Type": "video/mp4"})
 	if err != nil {
 		t.Errorf("failed to put %v", err)
 	}
 
 	// put buf
 	b := bytes.NewReader([]byte("UPYUN GO SDK"))
-	_, err = up.Put(testPath+"/"+upload+".buf", b, false, "", "", nil)
+	_, err = up.Put(testPath+"/"+upload+".buf", b, false, nil)
 	if err != nil {
 		t.Errorf("failed to put %v", err)
 	}
