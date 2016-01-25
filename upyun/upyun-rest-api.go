@@ -334,7 +334,6 @@ func (u *UpYun) doRESTRequest(method, uri, query string, headers map[string]stri
 	}
 
 	uri = escapeURI("/" + u.Bucket + uri)
-
 	url := fmt.Sprintf("http://%s%s", u.endpoint, uri)
 
 	if query != "" {
