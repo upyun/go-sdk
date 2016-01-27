@@ -119,11 +119,7 @@ func (u *UpYun) Put(key string, value io.Reader, useMD5 bool,
 #### 下载
 
 ```go
-func (u *UpYun) Get(key string, value io.Writer) error
-```
-
-```go
-func (u *UpYun) ReadFile(key string, value io.Writer) (int, error)
+func (u *UpYun) Get(key string, value io.Writer) (int, error)
 ```
 
 此方法返回文件大小

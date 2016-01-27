@@ -99,26 +99,17 @@ func TestGet(t *testing.T) {
 
 	defer os.Remove(download)
 
-	if err = up.Get(testPath+"/"+upload, fd); err != nil {
+	if length, err = up.Get(testPath+"/"+upload, fd); err != nil {
 		t.Errorf("failed to get %s %v", testPath+"/"+upload, err)
+	}
+
+	if length != int(uploadSize) {
+		t.Errorf("size not equal %d != %d", length, uploadSize)
 	}
 
 	dInfo, _ := fd.Stat()
 	if dInfo.Size() != uploadSize {
 		t.Errorf("size not equal %d != %d", dInfo.Size, uploadSize)
-	}
-}
-
-func TestReadFile(t *testing.T) {
-	fd, err = os.OpenFile(download, os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0600)
-	if err != nil {
-		t.Skipf("failed to open %s %v", download, err)
-	}
-
-	defer os.Remove(download)
-
-	if length, err = up.ReadFile(testPath+"/"+upload, fd); err != nil || length != int(uploadSize) {
-		t.Errorf("failed to ReadFile %s %v", testPath+"/"+upload, err)
 	}
 }
 

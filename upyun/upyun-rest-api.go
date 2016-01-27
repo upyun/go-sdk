@@ -144,19 +144,13 @@ func (u *UpYun) Put(key string, value io.Reader, useMD5 bool,
 	return rtHeaders, err
 }
 
-func (u *UpYun) ReadFile(key string, value io.Writer) (int, error) {
+// Get gets the specified file in UPYUN File System
+func (u *UpYun) Get(key string, value io.Writer) (int, error) {
 	length, _, err := u.doRESTRequest("GET", key, "", nil, value)
 	if err != nil {
 		return 0, err
 	}
 	return strconv.Atoi(length)
-}
-
-// Get gets the specified file in UPYUN File System
-func (u *UpYun) Get(key string, value io.Writer) error {
-	_, _, err := u.doRESTRequest("GET", key, "", nil, value)
-
-	return err
 }
 
 // Delete deletes the specified **file** in UPYUN File System.
