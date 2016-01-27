@@ -54,6 +54,12 @@ func (u *UpYun) SetEndpoint(ed int) error {
 	return errors.New("Invalid endpoint, pick from Auto, Telecom, Cnc, Ctt")
 }
 
+// SetEndpointStr sets the request endpoint to UPYUN REST API Server.
+func (u *UpYun) SetEndpointStr(endpoint string) error {
+	u.endpoint = endpoint
+	return nil
+}
+
 // make UpYun REST Authorization
 func (u *UpYun) makeRESTAuth(method, uri, date, lengthStr string) string {
 	sign := []string{method, uri, date, lengthStr, md5Str(u.Passwd)}
@@ -139,10 +145,12 @@ func (u *UpYun) Put(key string, value io.Reader, useMD5 bool,
 }
 
 // Get gets the specified file in UPYUN File System
-func (u *UpYun) Get(key string, value io.Writer) error {
-	_, _, err := u.doRESTRequest("GET", key, "", nil, value)
-
-	return err
+func (u *UpYun) Get(key string, value io.Writer) (int, error) {
+	length, _, err := u.doRESTRequest("GET", key, "", nil, value)
+	if err != nil {
+		return 0, err
+	}
+	return strconv.Atoi(length)
 }
 
 // Delete deletes the specified **file** in UPYUN File System.
@@ -338,6 +346,9 @@ func (u *UpYun) doRESTRequest(method, uri, query string, headers map[string]stri
 
 	headers["Date"] = date
 	headers["Authorization"] = u.makeRESTAuth(method, uri, date, lengthStr)
+	if !strings.Contains(u.endpoint, "api.upyun.com") {
+		headers["Host"] = "v0.api.upyun.com"
+	}
 
 	// HEAD GET request has no body
 	rc, ok := value.(io.Reader)

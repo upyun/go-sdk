@@ -23,6 +23,7 @@ var (
 	uploadSize    = uploadInfo.Size()
 	download      = "/tmp/xxx.go"
 
+	length    int
 	err       error
 	fd        *os.File
 	upInfo    *FileInfo
@@ -98,8 +99,12 @@ func TestGet(t *testing.T) {
 
 	defer os.Remove(download)
 
-	if err = up.Get(testPath+"/"+upload, fd); err != nil {
+	if length, err = up.Get(testPath+"/"+upload, fd); err != nil {
 		t.Errorf("failed to get %s %v", testPath+"/"+upload, err)
+	}
+
+	if length != int(uploadSize) {
+		t.Errorf("size not equal %d != %d", length, uploadSize)
 	}
 
 	dInfo, _ := fd.Stat()

@@ -23,10 +23,14 @@ func main() {
 
 	fd, _ := os.Open("cc.jpg")
 	x := fmt.Sprintf("/wm/cc%d.jpg", time.Now().Unix()%10000)
-	fmt.Println(up.Put(x, fd, false, "", "", headers))
+	fmt.Println(up.Put(x, fd, false, headers))
 
 	c := up.GetLargeList("/", true)
 	for {
-		fmt.Println(<-c)
+		v, more := <-c
+		if !more {
+			break
+		}
+		fmt.Println(v)
 	}
 }

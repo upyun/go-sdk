@@ -114,13 +114,15 @@ func (u *UpYun) Put(key string, value io.Reader, useMD5 bool,
         headers map[string]string) (http.Header, error)
 ```
 
-`key` 为 UPYUN 上的存储路径，`value` 既可以是文件，也可以是 `buffer`，`useMD5` 是否 MD5 校验，`headers` 自定义上传参数，除 ![上传参数](http://docs.upyun.com/api/rest_api/#_4)，还可以设置 `Content-Length`，支持流式上传。流式上传需要指定 `Contnet-Length`，如需 MD5 校验，需要设置 `Content-MD5`。
+`key` 为 UPYUN 上的存储路径，`value` 既可以是文件，也可以是 `buffer`，`useMD5` 是否 MD5 校验，`headers` 自定义上传参数，除 [上传参数](https://docs.upyun.com/api/rest_api/#_4)，还可以设置 `Content-Length`，支持流式上传。流式上传需要指定 `Contnet-Length`，如需 MD5 校验，需要设置 `Content-MD5`。
 
 #### 下载
 
 ```go
-func (u *UpYun) Get(key string, value io.Writer) error
+func (u *UpYun) Get(key string, value io.Writer) (int, error)
 ```
+
+此方法返回文件大小
 
 #### 删除
 
