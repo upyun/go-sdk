@@ -303,11 +303,11 @@ func NewUpYunMedia(bucket, user, pass string) *UpYunMedia
 #### 提交任务
 
 ```go
-func (upm *UpYunMedia) PostTasks(src, notify string,
+func (upm *UpYunMedia) PostTasks(src, notify, accept string,
     tasks []map[string]interface{}) ([]string, error)
 ```
 
-`src` 音视频文件 UPYUN 存储路径，`notify` 回调URL，`tasks` 任务列表，返回结果为任务 id 列表。
+`src` 音视频文件 UPYUN 存储路径，`notify` 回调URL，`accept` 设置回调格式，可选 `json`，`tasks` 任务列表，返回结果为任务 id 列表。
 
 #### 查询进度
 
