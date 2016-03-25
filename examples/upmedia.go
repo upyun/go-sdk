@@ -17,7 +17,7 @@ func main() {
 	}
 	tasks := []map[string]interface{}{task}
 
-	ids, _ := upm.PostTasks("kai.3gp", config.Notify, tasks)
+	ids, _ := upm.PostTasks("kai.3gp", config.Notify, "json", tasks)
 
 	for {
 		status, _ := upm.GetProgress(strings.Join(ids, ","))
