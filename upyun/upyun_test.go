@@ -261,7 +261,7 @@ func TestMedia(t *testing.T) {
 	}
 	tasks := []map[string]interface{}{task}
 
-	if ids, err := upm.PostTasks("kai.3gp", "http://www.upyun.com/notify", tasks); err != nil {
+	if ids, err := upm.PostTasks("kai.3gp", "http://www.upyun.com/notify", "json", tasks); err != nil {
 		t.Errorf("failed to post tasks %v %v", tasks, err)
 	} else {
 		if _, err = upm.GetProgress(strings.Join(ids, ",")); err != nil {
