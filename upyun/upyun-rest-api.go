@@ -160,6 +160,16 @@ func (u *UpYun) Delete(key string) error {
 	return err
 }
 
+// AsyncDelete deletes the specified **file** in UPYUN File Systemi asynchronously.
+func (u *UpYun) AsyncDelete(key string) error {
+	headers := map[string]string{
+		"X-Upyun-Async": "true",
+	}
+	_, _, err := u.doRESTRequest("DELETE", key, "", headers, nil)
+
+	return err
+}
+
 // GetList lists items in key. The number of items must be
 // less then 100
 func (u *UpYun) GetList(key string) ([]*FileInfo, error) {
