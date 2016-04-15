@@ -317,7 +317,8 @@ func (u *UpYun) Purge(urls []string) (string, error) {
 	if resp.StatusCode/100 == 2 {
 		result := make(map[string][]string)
 		if err := json.Unmarshal(content, &result); err != nil {
-			return "", err
+			// quick fix for invalid json resp: {"invalid_domain_of_url":{}}
+			return "", nil
 		}
 
 		return strings.Join(result["invalid_domain_of_url"], ","), nil
