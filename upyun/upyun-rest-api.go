@@ -160,7 +160,7 @@ func (u *UpYun) Delete(key string) error {
 	return err
 }
 
-// AsyncDelete deletes the specified **file** in UPYUN File Systemi asynchronously.
+// AsyncDelete deletes the specified **file** in UPYUN File System asynchronously.
 func (u *UpYun) AsyncDelete(key string) error {
 	headers := map[string]string{
 		"X-Upyun-Async": "true",
