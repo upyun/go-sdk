@@ -127,7 +127,11 @@ func (u *UpYun) Get(key string, value io.Writer) (int, error)
 #### 删除
 
 ```go
+// 同步删除
 func (u *UpYun) Delete(key string) error
+
+// 异步删除文件
+func (u *UpYun) AsyncDelete(key string) error
 ```
 
 #### 获取文件信息
@@ -150,7 +154,7 @@ func (u *UpYun) GetInfo(key string) (*FileInfo, error)
 func (u *UpYun) GetList(key string) ([]*FileInfo, error)
 
 // 大量文件
-func (u *UpYun) GetLargeList(key string, recursive bool) chan *FileInfo
+func (u *UpYun) GetLargeList(key string, recursive bool) (chan *FileInfo, chan error)
 ```
 
 `key` 必须为目录。对于目录下有大量文件的，建议使用 `GetLargeList`。

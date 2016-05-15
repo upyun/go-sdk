@@ -11,6 +11,7 @@ import (
 	"net/http"
 	URL "net/url"
 	"os"
+	"path"
 	"strconv"
 	"strings"
 )
@@ -192,36 +193,39 @@ func (u *UpYun) GetList(key string) ([]*FileInfo, error) {
 }
 
 // Note: key must be directory
-func (u *UpYun) GetLargeList(key string, recursive bool) chan *FileInfo {
-	var err error
-	var infos []*FileInfo
+func (u *UpYun) GetLargeList(key string, recursive bool) (chan *FileInfo, chan error) {
 	infoChannel := make(chan *FileInfo, 1000)
+	errChannel := make(chan error, 10)
 	if !strings.HasSuffix(key, "/") {
 		key += "/"
 	}
 
 	go func() {
-		var listDir func(k string)
-		listDir = func(k string) {
-			iter := ""
-			limit := 50
+		var listDir func(k string) error
+		listDir = func(k string) error {
+			var infos []*FileInfo
+			var niter string
+			var err error
+			iter, limit := "", 50
 			for {
-				var niter string
 				infos, niter, err = u.loopList(k, iter, limit)
 				if err != nil {
-					return
+					errChannel <- err
+					return err
 				}
 				iter = niter
 				for _, f := range infos {
 					// absolute path
-					abs := k + f.Name
+					abs := path.Join(k, f.Name)
 					// relative path
 					f.Name = strings.Replace(abs, key, "", 1)
 					if f.Name[0] == '/' {
 						f.Name = f.Name[1:]
 					}
 					if recursive && f.Type == "folder" {
-						listDir(abs + "/")
+						if err = listDir(abs + "/"); err != nil {
+							return err
+						}
 					}
 					infoChannel <- f
 				}
@@ -229,14 +233,16 @@ func (u *UpYun) GetLargeList(key string, recursive bool) chan *FileInfo {
 					break
 				}
 			}
+			return nil
 		}
 
 		listDir(key)
 
+		close(errChannel)
 		close(infoChannel)
 	}()
 
-	return infoChannel
+	return infoChannel, errChannel
 }
 
 // LoopList list items iteratively.
