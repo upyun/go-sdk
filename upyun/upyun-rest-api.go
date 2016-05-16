@@ -193,11 +193,15 @@ func (u *UpYun) GetList(key string) ([]*FileInfo, error) {
 }
 
 // Note: key must be directory
-func (u *UpYun) GetLargeList(key string, recursive bool) (chan *FileInfo, chan error) {
+func (u *UpYun) GetLargeList(key string, asc, recursive bool) (chan *FileInfo, chan error) {
 	infoChannel := make(chan *FileInfo, 1000)
 	errChannel := make(chan error, 10)
 	if !strings.HasSuffix(key, "/") {
 		key += "/"
+	}
+	order := "desc"
+	if asc == true {
+		order = "asc"
 	}
 
 	go func() {
@@ -208,7 +212,7 @@ func (u *UpYun) GetLargeList(key string, recursive bool) (chan *FileInfo, chan e
 			var err error
 			iter, limit := "", 50
 			for {
-				infos, niter, err = u.loopList(k, iter, limit)
+				infos, niter, err = u.loopList(k, iter, order, limit)
 				if err != nil {
 					errChannel <- err
 					return err
@@ -246,10 +250,10 @@ func (u *UpYun) GetLargeList(key string, recursive bool) (chan *FileInfo, chan e
 }
 
 // LoopList list items iteratively.
-func (u *UpYun) loopList(key, iter string, limit int) ([]*FileInfo, string, error) {
+func (u *UpYun) loopList(key, iter, order string, limit int) ([]*FileInfo, string, error) {
 	headers := map[string]string{
 		"X-List-Limit": fmt.Sprint(limit),
-		"X-List-Order": "asc",
+		"X-List-Order": order,
 	}
 	if iter != "" {
 		headers["X-List-Iter"] = iter

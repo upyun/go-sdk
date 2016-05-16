@@ -148,7 +148,7 @@ func TestGetList(t *testing.T) {
 }
 
 func TestGetLargeList(t *testing.T) {
-	ch, _ := up.GetLargeList(testPath, false)
+	ch, _ := up.GetLargeList(testPath, false, false)
 	count := 0
 	for {
 		var more bool
@@ -162,7 +162,7 @@ func TestGetLargeList(t *testing.T) {
 		t.Errorf("GetLargeList %d != 3", count)
 	}
 
-	ch, _ = up.GetLargeList(testPath, true)
+	ch, _ = up.GetLargeList(testPath, true, true)
 	count = 0
 	for {
 		var more bool
