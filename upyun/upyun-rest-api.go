@@ -174,6 +174,9 @@ func (u *UpYun) AsyncDelete(key string) error {
 // GetList lists items in key. The number of items must be
 // less then 100
 func (u *UpYun) GetList(key string) ([]*FileInfo, error) {
+	if fileinfo, err := u.GetInfo(key); (err != nil) || (fileinfo.Type != "folder") {
+		return nil, errors.New("Invalid Folder")
+	}
 	ret, _, err := u.doRESTRequest("GET", key, "", nil, nil)
 	if err != nil {
 		return nil, err
