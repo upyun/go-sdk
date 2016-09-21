@@ -45,7 +45,7 @@ func TestSetEndpoint(t *testing.T) {
 			_, err = up.Usage()
 		}
 		if err != nil {
-			t.Errorf("failed to SetEndpoint. %v", ed, err)
+			t.Errorf("failed to SetEndpoint. %v %v", ed, err)
 		}
 	}
 	if err = up.SetEndpoint(5); err == nil {
