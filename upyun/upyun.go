@@ -186,7 +186,7 @@ func newFileInfo(arg interface{}) *FileInfo {
 // ResumeReporter
 type ResumeReporter func(int, int)
 
-// ResumeReporterPrintln is the simple ResumeReporter for test
+// ResumeReporterPrintln is a simple ResumeReporter for test
 func ResumeReporterPrintln(partID int, maxPartID int) {
 	fmt.Printf("resume test reporter: %v / %v\n", partID, maxPartID)
 }
