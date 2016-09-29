@@ -223,7 +223,7 @@ func (u *UpYun) ResumePut(key string, value *os.File, useMD5 bool,
 			if i == ResumeRetryCount {
 				return resp, err
 			}
-			time.Sleep(time.Second * time.Duration(ResumeWaitSeconds))
+			time.Sleep(ResumeWaitTime)
 			file.Seek(0, 0)
 		}
 		if reporter != nil {

@@ -124,7 +124,7 @@ func (u *UpYun) ResumePut(key string, value *os.File, useMD5 bool,
 	headers map[string]string, reporter ResumeReporter) (http.Header, error)
 ```
 
-以断点续传方式上传文件，当文件在上传过程中遭遇网络故障时，将等待 `$ResumeWaitSeconds(default 5)` 秒后，在失败断点处自动重试 `$ResumeRetryCount(default 3)` 次。参数 reporter 用于报告上传进度。
+以断点续传方式上传文件，当文件在上传过程中遭遇网络故障时，将等待 `$ResumeWaitTime(default 5s)` 秒后，在失败断点处自动重试 `$ResumeRetryCount(default 3)` 次。参数 reporter 用于报告上传进度。
 
 
 #### 下载
