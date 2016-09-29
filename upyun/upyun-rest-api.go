@@ -161,7 +161,7 @@ func (u *UpYun) ResumePut(key string, value *os.File, useMD5 bool,
 	}
 
 	// If filesize < resumePartSizeLowerLimit, use UpYun.Put() instead
-	if fileinfo.Size() < resumePartSizeLowerLimit {
+	if fileinfo.Size() < resumeFileSizeLowerLimit {
 		return u.Put(key, value, useMD5, headers)
 	}
 
@@ -188,7 +188,7 @@ func (u *UpYun) ResumePut(key string, value *os.File, useMD5 bool,
 			innerHeaders["Content-Length"] = strconv.Itoa(resumePartSize)
 		case maxPartID:
 			innerHeaders["X-Upyun-Multi-Stage"] = "upload,complete"
-			innerHeaders["Content-Length"] = fmt.Sprintf("%v", fileinfo.Size()-int64(resumePartSize)*int64(part))
+			innerHeaders["Content-Length"] = fmt.Sprint(fileinfo.Size() - int64(resumePartSize)*int64(part))
 			if useMD5 {
 				md5Hash := md5.New()
 				value.Seek(0, 0)
@@ -220,11 +220,11 @@ func (u *UpYun) ResumePut(key string, value *os.File, useMD5 bool,
 			if !ok {
 				return resp, err
 			}
-			time.Sleep(time.Second * time.Duration(ResumeWaitSeconds))
-			file.Seek(0, 0)
 			if i == ResumeRetryCount {
 				return resp, err
 			}
+			time.Sleep(time.Second * time.Duration(ResumeWaitSeconds))
+			file.Seek(0, 0)
 		}
 		if reporter != nil {
 			reporter(part, maxPartID)

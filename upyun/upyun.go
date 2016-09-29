@@ -29,8 +29,8 @@ const (
 	defaultConnectTimeout = 60
 	// resumePartSize is the size of each part for resume upload
 	resumePartSize = 1024 * 1024
-	// resumePartSizeLowerLimit is the lowest file size limit for resume upload
-	resumePartSizeLowerLimit int64 = resumePartSize * 10
+	// resumeFileSizeLowerLimit is the lowest file size limit for resume upload
+	resumeFileSizeLowerLimit int64 = resumePartSize * 10
 )
 
 var (
@@ -221,7 +221,7 @@ func (f *FragmentFile) Seek(offset int64, whence int) (ret int64, err error) {
 		f.cursor = int(offset)
 		return f.File.Seek(f.offset+offset, 0)
 	default:
-		return 0, errors.New("whence muse be 0")
+		return 0, errors.New("whence must be 0")
 	}
 }
 
