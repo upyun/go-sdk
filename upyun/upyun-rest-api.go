@@ -190,11 +190,9 @@ func (u *UpYun) ResumePut(key string, value *os.File, useMD5 bool,
 			innerHeaders["X-Upyun-Multi-Stage"] = "upload,complete"
 			innerHeaders["Content-Length"] = fmt.Sprint(fileinfo.Size() - int64(resumePartSize)*int64(part))
 			if useMD5 {
-				md5Hash := md5.New()
 				value.Seek(0, 0)
-				io.Copy(md5Hash, value)
-				md5 := md5Hash.Sum(nil)
-				innerHeaders["X-Upyun-Multi-MD5"] = base64Str(md5)
+				hex, _, _ := md5sum(value)
+				innerHeaders["X-Upyun-Multi-MD5"] = hex
 			}
 		default:
 			innerHeaders["X-Upyun-Multi-Stage"] = "upload"
