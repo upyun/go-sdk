@@ -109,7 +109,7 @@ func TestGet(t *testing.T) {
 
 	dInfo, _ := fd.Stat()
 	if dInfo.Size() != uploadSize {
-		t.Errorf("size not equal %d != %d", dInfo.Size, uploadSize)
+		t.Errorf("size not equal %d != %d", dInfo.Size(), uploadSize)
 	}
 }
 
