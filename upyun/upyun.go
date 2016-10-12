@@ -24,7 +24,7 @@ const (
 	// Default(Min/Max)ChunkSize: set the buffer size when doing copy operation
 	defaultChunkSize = 32 * 1024
 	// defaultConnectTimeout: connection timeout when connect to upyun endpoint
-	defaultConnectTimeout = 60
+	defaultConnectTimeout = time.Second * 60
 )
 
 // chunkSize: chunk size when copy
@@ -110,9 +110,9 @@ func chunkedCopy(dst io.Writer, src io.Reader) (written int64, err error) {
 }
 
 // Use for http connection timeout
-func timeoutDialer(timeout int) func(string, string) (net.Conn, error) {
+func timeoutDialer(timeout time.Duration) func(string, string) (net.Conn, error) {
 	return func(network, addr string) (c net.Conn, err error) {
-		c, err = net.DialTimeout(network, addr, time.Duration(timeout)*time.Second)
+		c, err = net.DialTimeout(network, addr, timeout)
 		if err != nil {
 			return nil, err
 		}

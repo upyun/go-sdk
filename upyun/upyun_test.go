@@ -2,7 +2,9 @@ package upyun
 
 import (
 	"bytes"
+	"crypto/md5"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"testing"
@@ -174,6 +176,79 @@ func TestGetLargeList(t *testing.T) {
 	}
 	if count != 4 {
 		t.Errorf("GetLargeList recursive %d != 4", count)
+	}
+}
+
+func TestResumeSmallFile(t *testing.T) {
+	file, err := os.Open(upload)
+	if err != nil {
+		t.Error(err)
+	}
+	defer file.Close()
+
+	md5Hash := md5.New()
+	io.Copy(md5Hash, file)
+	md5 := fmt.Sprintf("%x", md5Hash.Sum(nil))
+	file.Seek(0, 0)
+
+	_, err = up.ResumePut(testPath+"/"+upload, file, true, map[string]string{"Content-Type": "text/plain"}, nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	_, err = up.GetInfo(testPath + "/" + upload)
+	if err != nil {
+		t.Error(err)
+	}
+
+	buf := bytes.NewBuffer(make([]byte, 0, 1024))
+	up.Get(testPath+"/"+upload, buf)
+
+	md5Hash.Reset()
+	io.Copy(md5Hash, buf)
+
+	if fmt.Sprintf("%x", md5Hash.Sum(nil)) != md5 {
+		t.Error("MD5 is inconsistent")
+	}
+}
+
+func TestResumeBigFile(t *testing.T) {
+	file, err := os.OpenFile("/tmp/bigfile", os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0666)
+	if err != nil {
+		t.Error(err)
+	}
+	defer os.Remove(file.Name())
+	defer file.Close()
+
+	for i := 0; i < 15*1024; i++ {
+		file.Write(bytes.Repeat([]byte("1"), 1024))
+	}
+	file.Seek(0, 0)
+
+	md5Hash := md5.New()
+	io.Copy(md5Hash, file)
+	md5 := fmt.Sprintf("%x", md5Hash.Sum(nil))
+	file.Seek(0, 0)
+
+	_, err = up.ResumePut(testPath+"/"+"bigfile", file, true, nil, ResumeReporterPrintln)
+	if err != nil {
+		t.Error(err)
+	}
+
+	defer up.Delete(testPath + "/" + "bigfile")
+
+	_, err = up.GetInfo(testPath + "/" + "bigfile")
+	if err != nil {
+		t.Error(err)
+	}
+
+	buf := bytes.NewBuffer(make([]byte, 0, 1024))
+	up.Get(testPath+"/"+"bigfile", buf)
+
+	md5Hash.Reset()
+	io.Copy(md5Hash, buf)
+	if fmt.Sprintf("%x", md5Hash.Sum(nil)) != md5 {
+		t.Error("MD5 is inconsistent")
 	}
 }
 

@@ -25,6 +25,7 @@ Table of Contents
         * [获取空间存储使用量](#获取空间存储使用量)
         * [创建目录](#创建目录)
         * [上传](#上传)
+        * [断点续传](#断点续传)
         * [下载](#下载)
         * [删除](#删除)
         * [获取文件信息](#获取文件信息)
@@ -115,6 +116,16 @@ func (u *UpYun) Put(key string, value io.Reader, useMD5 bool,
 ```
 
 `key` 为 UPYUN 上的存储路径，`value` 既可以是文件，也可以是 `buffer`，`useMD5` 是否 MD5 校验，`headers` 自定义上传参数，除 [上传参数](https://docs.upyun.com/api/rest_api/#_4)，还可以设置 `Content-Length`，支持流式上传。流式上传需要指定 `Contnet-Length`，如需 MD5 校验，需要设置 `Content-MD5`。
+
+
+#### 断点续传
+```go
+func (u *UpYun) ResumePut(key string, value *os.File, useMD5 bool,
+	headers map[string]string, reporter ResumeReporter) (http.Header, error)
+```
+
+以断点续传方式上传文件，当文件在上传过程中遭遇网络故障时，将等待 5 秒后，在失败断点处自动重试 3 次。参数 `reporter` 用于报告上传进度。可通过修改全局变量 `ResumeWaitTime` 与 `ResumeRetryCount` 自定义重试等待时间与重试次数。
+
 
 #### 下载
 

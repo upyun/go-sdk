@@ -27,11 +27,11 @@ type upYunHTTPCore struct {
 	httpClient *http.Client
 }
 
-func (core *upYunHTTPCore) SetTimeout(timeout int) {
+func (core *upYunHTTPCore) SetTimeout(timeout time.Duration) {
 	core.httpClient = &http.Client{
 		Transport: &http.Transport{
 			Dial: func(network, addr string) (c net.Conn, err error) {
-				c, err = net.DialTimeout(network, addr, time.Duration(timeout)*time.Second)
+				c, err = net.DialTimeout(network, addr, timeout)
 				if err != nil {
 					return nil, err
 				}

@@ -8,12 +8,14 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	URL "net/url"
 	"os"
 	"path"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // UPYUN REST API Client
@@ -143,6 +145,95 @@ func (u *UpYun) Put(key string, value io.Reader, useMD5 bool,
 	_, rtHeaders, err := u.doRESTRequest("PUT", key, "", headers, value)
 
 	return rtHeaders, err
+}
+
+// Put uploads file object to UPYUN File System part by part,
+// and automatically retries when a network problem occurs
+func (u *UpYun) ResumePut(key string, value *os.File, useMD5 bool,
+	headers map[string]string, reporter ResumeReporter) (http.Header, error) {
+	if headers == nil {
+		headers = make(map[string]string)
+	}
+
+	fileinfo, err := value.Stat()
+	if err != nil {
+		return nil, err
+	}
+
+	// If filesize < resumePartSizeLowerLimit, use UpYun.Put() instead
+	if fileinfo.Size() < resumeFileSizeLowerLimit {
+		return u.Put(key, value, useMD5, headers)
+	}
+
+	maxPartID := int(fileinfo.Size() / resumePartSize)
+	if fileinfo.Size()%resumePartSize == 0 {
+		maxPartID--
+	}
+
+	var resp http.Header
+
+	for part := 0; part <= maxPartID; part++ {
+
+		innerHeaders := make(map[string]string)
+		for k, v := range headers {
+			innerHeaders[k] = v
+		}
+
+		innerHeaders["X-Upyun-Part-Id"] = strconv.Itoa(part)
+		switch part {
+		case 0:
+			innerHeaders["X-Upyun-Multi-Type"] = headers["Content-Type"]
+			innerHeaders["X-Upyun-Multi-Length"] = strconv.FormatInt(fileinfo.Size(), 10)
+			innerHeaders["X-Upyun-Multi-Stage"] = "initiate,upload"
+			innerHeaders["Content-Length"] = strconv.Itoa(resumePartSize)
+		case maxPartID:
+			innerHeaders["X-Upyun-Multi-Stage"] = "upload,complete"
+			innerHeaders["Content-Length"] = fmt.Sprint(fileinfo.Size() - int64(resumePartSize)*int64(part))
+			if useMD5 {
+				value.Seek(0, 0)
+				hex, _, _ := md5sum(value)
+				innerHeaders["X-Upyun-Multi-MD5"] = hex
+			}
+		default:
+			innerHeaders["X-Upyun-Multi-Stage"] = "upload"
+			innerHeaders["Content-Length"] = strconv.Itoa(resumePartSize)
+		}
+
+		file, err := NewFragmentFile(value, int64(part)*int64(resumePartSize), resumePartSize)
+		if err != nil {
+			return resp, err
+		}
+		if useMD5 {
+			innerHeaders["Content-MD5"], _ = file.MD5()
+		}
+
+		// Retry when get net error from UpYun.Put(), return error in other cases
+		for i := 0; i < ResumeRetryCount+1; i++ {
+			resp, err = u.Put(key, file, useMD5, innerHeaders)
+			if err == nil {
+				break
+			}
+			// Retry only get net error
+			_, ok := err.(net.Error)
+			if !ok {
+				return resp, err
+			}
+			if i == ResumeRetryCount {
+				return resp, err
+			}
+			time.Sleep(ResumeWaitTime)
+			file.Seek(0, 0)
+		}
+		if reporter != nil {
+			reporter(part, maxPartID)
+		}
+
+		if part == 0 {
+			headers["X-Upyun-Multi-UUID"] = resp.Get("X-Upyun-Multi-Uuid")
+		}
+	}
+
+	return resp, nil
 }
 
 // Get gets the specified file in UPYUN File System
