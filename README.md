@@ -10,6 +10,39 @@ UPYUN Go SDK, 集成：
 - [又拍云缓存刷新接口](http://docs.upyun.com/api/purge/)
 - [又拍云视频处理接口](http://docs.upyun.com/api/av_pretreatment/)
 
+Table of Contents
+=================
+
+  * [UPYUN Go SDK](#upyun-go-sdk)
+    * [Projects using this SDK](#projects-using-this-sdk)
+    * [Usage](#usage)
+      * [快速上手](#快速上手)
+      * [初始化 UpYun](#初始化-upyun)
+      * [又拍云 REST API 接口](#又拍云-rest-api-接口)
+        * [获取空间存储使用量](#获取空间存储使用量)
+        * [创建目录](#创建目录)
+        * [上传](#上传)
+        * [下载](#下载)
+        * [删除](#删除)
+        * [获取文件信息](#获取文件信息)
+        * [获取文件列表](#获取文件列表)
+      * [又拍云缓存刷新接口](#又拍云缓存刷新接口)
+      * [又拍云表单上传接口](#又拍云表单上传接口)
+      * [又拍云处理接口](#又拍云处理接口)
+        * [提交处理任务](#提交处理任务)
+        * [获取处理进度](#获取处理进度)
+        * [获取处理结果](#获取处理结果)
+      * [基本类型](#%E5%9F%BA%E6%9C%AC%E7%B1%BB%E5%9E%8B)
+        * [UpYun](#upyun)
+        * [FileInfo](#fileinfo)
+        * [FormUploadResp](#formuploadresp)
+        * [PutObjectConfig](#putobjectconfig)
+        * [GetObjectConfig](#getobjectconfig)
+        * [GetObjectsConfig](#getobjectsconfig)
+        * [DeleteObjectConfig](#deleteobjectconfig)
+        * [FormUploadConfig](#formuploadconfig)
+        * [CommitTasksConfig](#committasksconfig)
+
 ## Projects using this SDK
 
 - [又拍云命令行工具](https://github.com/polym/upx) by [polym](https://github.com/polym)
@@ -135,7 +168,7 @@ func (up *UpYun) FormUpload(config *FormUploadConfig) (*FormUploadResp, error)
 
 ### 又拍云处理接口
 
-#### 提供处理任务
+#### 提交处理任务
 
 ```go
 func (up *UpYun) CommitTasks(config *CommitTasksConfig) (taskIds []string, err error)
