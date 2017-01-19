@@ -5,174 +5,119 @@
     import "github.com/upyun/go-sdk/upyun"
 
 UPYUN Go SDK, 集成：
-- [UPYUN HTTP REST 接口](http://docs.upyun.com/api/rest_api/)
-- [UPYUN HTTP FORM 接口](http://docs.upyun.com/api/form_api/)
-- [UPYUN 缓存刷新接口](http://docs.upyun.com/api/purge/)
-- [UPYUN 分块上传接口](http://docs.upyun.com/api/multipart_upload/)
-- [UPYUN 视频处理接口](http://docs.upyun.com/api/av_pretreatment/)
-
-Table of Contents
-=================
-
-  * [UPYUN Go SDK](#upyun-go-sdk)
-    * [Examples](#examples)
-    * [Projects using this SDK](#projects-using-this-sdk)
-    * [Usage](#usage)
-      * [UPYUN HTTP REST 接口](#upyun-http-rest-接口)
-        * [UpYun](#upyun)
-        * [初始化 UpYun](#初始化-upyun)
-        * [设置 API 访问域名](#设置-api-访问域名)
-        * [获取空间存储使用量](#获取空间存储使用量)
-        * [创建目录](#创建目录)
-        * [上传](#上传)
-        * [断点续传](#断点续传)
-        * [下载](#下载)
-        * [删除](#删除)
-        * [获取文件信息](#获取文件信息)
-        * [获取文件列表](#获取文件列表)
-      * [UPYUN 缓存刷新接口](#upyun-缓存刷新接口)
-      * [UPYUN HTTP 表单上传接口](#upyun-http-表单上传接口)
-        * [UpYunForm](#upyunform)
-        * [初始化 UpYunForm](#初始化-upyunform)
-        * [FormAPIResp](#formapiresp)
-        * [设置 API 访问域名](#设置-api-访问域名-1)
-        * [上传文件](#上传文件)
-      * [UPYUN 分块上传接口](#upyun-分块上传接口)
-        * [UpYunMultiPart](#upyunmultipart)
-        * [UploadResp](#uploadresp)
-        * [MergeResp](#mergeresp)
-        * [初始化 UpYunMultiPart](#初始化-upyunmultipart)
-        * [上传](#上传-1)
-      * [UPYUN 音视频处理接口](#upyun-音视频处理接口)
-        * [UpYunMedia](#upyunmedia)
-        * [MediaStatusResp](#mediastatusresp)
-        * [初始化 UpYunMedia](#初始化-upyunmedia)
-        * [提交任务](#提交任务)
-        * [查询进度](#查询进度)
-
-## Examples
-
-示例代码见 `examples/`。
+- [又拍云 HTTP REST 接口](http://docs.upyun.com/api/rest_api/)
+- [又拍云 HTTP FORM 接口](http://docs.upyun.com/api/form_api/)
+- [又拍云缓存刷新接口](http://docs.upyun.com/api/purge/)
+- [又拍云视频处理接口](http://docs.upyun.com/api/av_pretreatment/)
 
 ## Projects using this SDK
 
-- [UPYUN Command Tool](https://github.com/polym/upx) by [polym](https://github.com/polym)
+- [又拍云命令行工具](https://github.com/polym/upx) by [polym](https://github.com/polym)
 
 ## Usage
 
-### UPYUN HTTP REST 接口
-
-#### UpYun
+### 快速上手
 
 ```go
-type UpYun struct {
-    Bucket    string    // 空间名（即服务名称）
-    Username  string    // 操作员
-    Passwd    string    // 密码
-    ChunkSize int       // 块读取大小, 默认32KB
+package main
+
+import (
+    "fmt"
+    "github.com/polym/new/upyun"
+)
+
+func main() {
+    up := upyun.NewUpYun(&upyun.UpYunConfig{
+        Bucket:   "demo",
+        Operator: "op",
+        Password: "password",
+    })
+
+    // 上传文件
+    fmt.Println(up.Put(&upyun.PutObjectConfig{
+        Path:      "/demo.log",
+        LocalPath: "/tmp/upload",
+    }))
+
+    // 下载
+    fmt.Println(up.Get(&upyun.GetObjectConfig{
+        Path:      "/demo.log",
+        LocalPath: "/tmp/download",
+    }))
+
+    // 列目录
+    objsChan := make(chan *upyun.FileInfo, 10)
+    go func() {
+        fmt.Println(up.List(&upyun.GetObjectsConfig{
+            Path:        "/",
+            ObjectsChan: objsChan,
+        }))
+    }()
+
+    for obj := range objsChan {
+        fmt.Println(obj)
+    }
 }
 ```
 
-#### 初始化 UpYun
+
+### 初始化 UpYun
 
 ```go
-func NewUpYun(bucket, username, passwd string) *UpYun
+func NewUpYun(config *UpYunConfig) *UpYun
 ```
 
-#### 设置 API 访问域名
+`NewUpYun` 初始化 `UpYun`，`UpYun` 是调用又拍云服务的统一入口，`UpYun` 对所有开放的接口都做了支持。
 
-```go
-// Auto: Auto detected, based on user's internet
-// Telecom: (ISP) China Telecom
-// Cnc:     (ISP) China Unicom
-// Ctt:     (ISP) China Tietong
-const (
-    Auto = iota
-    Telecom
-    Cnc
-    Ctt
-)
+---
 
-func (u *UpYun) SetEndpoint(ed int) error
-```
+### 又拍云 REST API 接口
 
 #### 获取空间存储使用量
 
 ```go
-func (u *UpYun) Usage() (int64, error)
+func (up *UpYun) Usage() (n int64, err error)
 ```
 
 #### 创建目录
 
 ```go
-func (u *UpYun) Mkdir(key string) error
+func (up *UpYun) Mkdir(path string) error
 ```
 
 #### 上传
 
 ```go
-func (u *UpYun) Put(key string, value io.Reader, useMD5 bool,
-        headers map[string]string) (http.Header, error)
+func (up *UpYun) Put(config *PutObjectConfig) (err error)
 ```
-
-`key` 为 UPYUN 上的存储路径，`value` 既可以是文件，也可以是 `buffer`，`useMD5` 是否 MD5 校验，`headers` 自定义上传参数，除 [上传参数](https://docs.upyun.com/api/rest_api/#_4)，还可以设置 `Content-Length`，支持流式上传。流式上传需要指定 `Contnet-Length`，如需 MD5 校验，需要设置 `Content-MD5`。
-
-
-#### 断点续传
-```go
-func (u *UpYun) ResumePut(key string, value *os.File, useMD5 bool,
-	headers map[string]string, reporter ResumeReporter) (http.Header, error)
-```
-
-以断点续传方式上传文件，当文件在上传过程中遭遇网络故障时，将等待 5 秒后，在失败断点处自动重试 3 次。参数 `reporter` 用于报告上传进度。可通过修改全局变量 `ResumeWaitTime` 与 `ResumeRetryCount` 自定义重试等待时间与重试次数。
-
 
 #### 下载
 
 ```go
-func (u *UpYun) Get(key string, value io.Writer) (int, error)
+func (up *UpYun) Get(config *GetObjectConfig) (fInfo *FileInfo, err error)
 ```
-
-此方法返回文件大小
 
 #### 删除
 
 ```go
-// 同步删除
-func (u *UpYun) Delete(key string) error
-
-// 异步删除文件
-func (u *UpYun) AsyncDelete(key string) error
+func (up *UpYun) Delete(config *DeleteObjectConfig) error
 ```
 
 #### 获取文件信息
 
 ```go
-type FileInfo struct {
-    Size int64         // 文件大小
-    Time time.Time     // 修改时间
-    Name string        // 文件名
-    Type string        // 类型，folder 或者 file
-}
-
-func (u *UpYun) GetInfo(key string) (*FileInfo, error)
+func (up *UpYun) GetInfo(path string) (*FileInfo, error)
 ```
 
 #### 获取文件列表
 
 ```go
-// 少量文件
-func (u *UpYun) GetList(key string) ([]*FileInfo, error)
-
-// 大量文件
-func (u *UpYun) GetLargeList(key string, asc, recursive bool) (chan *FileInfo, chan error)
+func (up *UpYun) List(config *GetObjectsConfig) error
 ```
-
-`key` 必须为目录。对于目录下有大量文件的，建议使用 `GetLargeList`。
 
 ---
 
-### UPYUN 缓存刷新接口
+### 又拍云缓存刷新接口
 
 ```go
 func (u *UpYun) Purge(urls []string) (string, error)
@@ -180,154 +125,194 @@ func (u *UpYun) Purge(urls []string) (string, error)
 
 ---
 
-### UPYUN HTTP 表单上传接口
-
-#### UpYunForm
+### 又拍云表单上传接口
 
 ```go
-type UpYunForm struct {
-    Secret    string    // 表单密钥
-    Bucket    string    // 空间名（即服务名称）
-}
-```
-
-#### 初始化 UpYunForm
-
-```go
-func NewUpYunForm(bucket, key string) *UpYunForm
-```
-
-#### FormAPIResp
-
-```go
-type FormAPIResp struct {
-    Code      int    `json:"code"`
-    Msg       string `json:"message"`
-    Url       string `json:"url"`
-    Timestamp int64  `json:"time"`
-    ImgWidth  int    `json:"image-width"`
-    ImgHeight int    `json:"image-height"`
-    ImgFrames int    `json:"image-frames"`
-    ImgType   string `json:"image-type"`
-    Sign      string `json:"sign"`
-}
-```
-
-#### 设置 API 访问域名
-
-```go
-func (u *UpYunForm) SetEndpoint(ed int) error
-```
-
-#### 上传文件
-
-```go
-func (uf *UpYunForm) Put(fpath, saveas string, expireAfter int64,
-    options map[string]string) (*FormAPIResp, error)
-```
-
-`fpath` 上传文件名，`saveas` UPYUN 存储保存路径，`expireAfter` 过期时间长度，`options` 上传参数。
-
----
-
-### UPYUN 分块上传接口
-
-#### UpYunMultiPart
-
-```go
-type UpYunMultiPart struct {
-    Bucket    string        // 空间名（即服务名称）
-    Secret    string        // 表单密钥
-    BlockSize int64         // 分块大小，单位字节, 建议 1024000
-}
-```
-
-#### UploadResp
-
-```go
-type UploadResp struct {
-    // returns after init request
-    SaveToken string `json:"save_token"`
-    // token_secert is equal to UPYUN Form API Secret
-    Secret string `json:"token_secret"`
-    // UPYUN Bucket Name
-    Bucket string `json:"bucket_name"`
-    // Number of Blocks
-    Blocks   int   `json:"blocks"`
-    Status   []int `json:"status"`
-    ExpireAt int64 `json:"expire_at"`
-}
-```
-
-#### MergeResp
-
-```go
-type MergeResp struct {
-    Path          string      `json:"path"`
-    ContentType   string      `json:"mimetype"`
-    ContentLength interface{} `json:"file_size"`
-    LastModify    int64       `json:"last_modified"`
-    Signature     string      `json:"signature"`
-    ImageWidth    int         `json:"image_width"`
-    ImageHeight   int         `json:"image_height"`
-    ImageFrames   int         `json:"image_frames"`
-}
-```
-
-#### 初始化 UpYunMultiPart
-
-```go
-func NewUpYunMultiPart(bucket, secret string, blocksize int64) *UpYunMultiPart
-```
-
-#### 上传
-
-```go
-func (ump *UpYunMultiPart) Put(fpath, saveas string,
-    expireAfter int64, options map[string]interface{}) (*MergeResp, error)
+func (up *UpYun) FormUpload(config *FormUploadConfig) (*FormUploadResp, error)
 ```
 
 ---
 
-### UPYUN 音视频处理接口
+### 又拍云处理接口
 
-#### UpYunMedia
+#### 提供处理任务
 
 ```go
-type UpYunMedia struct {
-    Username  string    // 操作员
-    Passwd    string    // 密码
-    Bucket    string    // 空间名（即服务名称）
+func (up *UpYun) CommitTasks(config *CommitTasksConfig) (taskIds []string, err error)
+```
+
+`tasksIds` 是提交任务的编号。通过这个编号，可以查询到处理进度以及处理结果等状态。
+
+#### 获取处理进度
+
+```go
+func (up *UpYun) GetProgress(taskIds []string) (result map[string]int, err error)
+```
+
+#### 获取处理结果
+
+```go
+func (up *UpYun) GetResult(taskIds []string) (result map[string]interface{}, err error)
+```
+
+---
+
+### 基本类型
+
+#### UpYun
+
+```go
+type UpYunConfig struct {
+        Bucket    string                // 云存储服务名（空间名）
+        Operator  string                // 操作员
+        Password  string                // 密码
+        Secret    string                // 表单上传密钥，已经弃用
+        Hosts     map[string]string     // 自定义 Hosts 映射关系
+        UserAgent string                // HTTP User-Agent 头，默认
 }
 ```
 
-#### MediaStatusResp
+`UpYunConfig` 提供了初始化 `UpYun` 的参数。 需要注意的是，`Secret` 表单密钥已经弃用，如果一定需要使用，需调用 `Use`
+
+
+#### FileInfo
 
 ```go
-type MediaStatusResp struct {
-    Tasks map[string]interface{} `json:"tasks"`
+type FileInfo struct {
+        Name        string              // 文件名
+        Size        int64               // 文件大小, 目录大小为 0
+        ContentType string              // 文件 Content-Type
+        IsDir       bool                // 是否为目录
+        ETag        string              // ETag 值
+        Time        time.Time           // 文件修改时间
+
+        Meta map[string]string          // Metadata 数据
+
+        /* image information */
+        ImgType   string
+        ImgWidth  int64
+        ImgHeight int64
+        ImgFrames int64
 }
 ```
 
-#### 初始化 UpYunMedia
+#### FormUploadResp
 
 ```go
-func NewUpYunMedia(bucket, user, pass string) *UpYunMedia
+type FormUploadResp struct {
+        Code      int      `json:"code"`            // 状态码
+        Msg       string   `json:"message"`         // 状态信息
+        Url       string   `json:"url"`             // 保存路径
+        Timestamp int64    `json:"time"`            // 时间戳
+        ImgWidth  int      `json:"image-width"`     // 图片宽度
+        ImgHeight int      `json:"image-height"`    // 图片高度
+        ImgFrames int      `json:"image-frames"`    // 图片帧数
+        ImgType   string   `json:"image-type"`      // 图片类型
+        Sign      string   `json:"sign"`            // 签名
+        Taskids   []string `json:"task_ids"`        // 异步任务
+}
 ```
 
-#### 提交任务
+`FormUploadResp` 为表单上传的返回内容的格式。其中 `Code` 字段为状态码，可以查看 [API 错误码表](https://docs.upyun.com/api/errno/)
+
+#### PutObjectConfig
 
 ```go
-func (upm *UpYunMedia) PostTasks(src, notify, accept string,
-    tasks []map[string]interface{}) ([]string, error)
+type PutObjectConfig struct {
+        Path              string                // 云存储中的路径
+        LocalPath         string                // 待上传文件在本地文件系统中的路径
+        Reader            io.Reader             // 待上传的内容
+        Headers           map[string]string     // 请求额外的 HTTP 头
+        UseMD5            bool                  // 是否需要 MD5 校验
+        UseResumeUpload   bool                  // 是否使用断点续传
+        AppendContent     bool                  // 是否是追加文件内容
+        ResumePartSize    int64                 // 断点续传块大小
+        MaxResumePutTries int                   // 断点续传最大重试次数
+}
 ```
 
-`src` 音视频文件 UPYUN 存储路径，`notify` 回调URL，`accept` 设置回调格式，可选 `json`，`tasks` 任务列表，返回结果为任务 id 列表。
+`PutObjectConfig` 提供上传单个文件所需的参数。有几点需要注意:
+- `LocalPath` 跟 `Reader` 是一个互斥的关系，如果设置了 `LocalPath`，SDK 就会去读取这个文件，而忽略 `Reader` 中的内容。
+- 如果 `Reader` 是一个流／缓冲等的话，需要通过 `Headers` 参数设置 `Content-Length`，SDK 默认会对 `*os.File` 增加该字段。
+- [断点续传](https://docs.upyun.com/api/rest_api/#_3)的上传内容必须是 `*os.File`, 断点续传会将文件按照 `ResumePartSize` 进行切割，然后按次序一块一块上传，如果遇到网络问题，会进行重试，重试 `MaxResumePutTries` 次，默认无限重试。
+- `AppendContent` 如果是追加文件的话，确保非最后的分片必须为 1M 的整数倍。
+- 如果需要 MD5 校验，SDK 对 `*os.File` 会自动计算 MD5 值，其他类型需要自行通过 `Headers` 参数设置 `Content-MD5`
 
-#### 查询进度
+
+#### GetObjectConfig
 
 ```go
-func (upm *UpYunMedia) GetProgress(task_ids string) (*MediaStatusResp, error)
+type GetObjectConfig struct {
+        Path      string                    // 云存储中的路径
+        Headers   map[string]string         // 请求额外的 HTTP 头
+        LocalPath string                    // 文件本地保存路径
+        Writer    io.Writer                 // 保存内容的容器
+}
 ```
 
-`task_ids` 是多个 `task_id` 用 `,` 连接起来。
+`GetObjectConfig` 提供下载单个文件所需的参数。 跟 `PutObjectConfig` 类似，`LocalPath` 跟 `Writer` 是一个互斥的关系，如果设置了 `LocalPath`，SDK 就会把内容写入到这个文件中，而忽略 `Writer`。
+
+
+#### GetObjectsConfig
+
+```go
+type GetObjectsConfig struct {
+        Path           string                   // 云存储中的路径
+        Headers        map[string]string        // 请求额外的 HTTP 头
+        ObjectsChan    chan *FileInfo           // 对象 Channel
+        QuitChan       chan bool                // 停止信号
+        MaxListObjects int                      // 最大列对象个数
+        MaxListTries   int                      // 列目录最大重试次数
+        MaxListLevel int                        // 递归最大深度
+        DescOrder bool                          // 是否按降序列取，默认为生序
+
+        // Has unexported fields.
+}
+```
+
+`GetObjectsConfig` 提供列目录所需的参数。当列目录结束后，SDK 会将 `ObjectChan` 关闭掉。
+
+
+#### DeleteObjectConfig
+
+```go
+type DeleteObjectConfig struct {
+        Path  string        // 云存储中的路径
+        Async bool          // 是否使用异步删除
+}
+```
+
+`DeleteObjectConfig` 提供删除单个文件／空目录所需的参数。
+
+
+#### FormUploadConfig
+
+```go
+type FormUploadConfig struct {
+        LocalPath      string                       // 待上传的文件路径
+        SaveKey        string                       // 保存路径
+        ExpireAfterSec int64                        // 签名超时时间
+        NotifyUrl      string                       // 结果回调地址
+        Apps           []map[string]interface{}     // 异步处理任务
+        Options        map[string]interface{}       // 更多自定义参数
+}
+```
+
+`FormUploadConfig` 提供表单上传所需的参数。
+
+
+#### CommitTasksConfig
+
+```go
+type CommitTasksConfig struct {
+        AppName   string                            // 异步任务名称
+        NotifyUrl string                            // 回调地址
+        Tasks     []interface{}                     // 任务数组
+
+        // Naga 相关配置
+        Accept    string                            // 回调支持的类型，默认为 json
+        Source    string                            // 处理原文件路径
+}
+```
+
+`CommitTasksConfig` 提供提交异步任务所需的参数。`Accept` 跟 `Source` 仅与异步音视频处理有关。`Tasks` 是一个任务数组，数组中的每一个元素都是任务相关的参数（一般情况下为字典类型）。
