@@ -4,7 +4,7 @@
 
     import "github.com/upyun/go-sdk/upyun"
 
-UPYUN Go SDK, 集成：
+又拍云 Go SDK, 集成：
 - [又拍云 HTTP REST 接口](http://docs.upyun.com/api/rest_api/)
 - [又拍云 HTTP FORM 接口](http://docs.upyun.com/api/form_api/)
 - [又拍云缓存刷新接口](http://docs.upyun.com/api/purge/)
@@ -32,7 +32,7 @@ Table of Contents
         * [提交处理任务](#提交处理任务)
         * [获取处理进度](#获取处理进度)
         * [获取处理结果](#获取处理结果)
-      * [基本类型](#%E5%9F%BA%E6%9C%AC%E7%B1%BB%E5%9E%8B)
+      * [基本类型](#基本类型)
         * [UpYun](#upyun)
         * [FileInfo](#fileinfo)
         * [FormUploadResp](#formuploadresp)
@@ -56,7 +56,7 @@ package main
 
 import (
     "fmt"
-    "github.com/polym/new/upyun"
+    "github.com/upyun/go-sdk/upyun"
 )
 
 func main() {
@@ -199,13 +199,13 @@ type UpYunConfig struct {
         Bucket    string                // 云存储服务名（空间名）
         Operator  string                // 操作员
         Password  string                // 密码
-        Secret    string                // 表单上传密钥，已经弃用
+        Secret    string                // 表单上传密钥，已经弃用！
         Hosts     map[string]string     // 自定义 Hosts 映射关系
-        UserAgent string                // HTTP User-Agent 头，默认
+        UserAgent string                // HTTP User-Agent 头，默认 "UPYUN Go SDK V2"
 }
 ```
 
-`UpYunConfig` 提供了初始化 `UpYun` 的参数。 需要注意的是，`Secret` 表单密钥已经弃用，如果一定需要使用，需调用 `Use`
+`UpYunConfig` 提供初始化 `UpYun` 的所需参数。 需要注意的是，`Secret` 表单密钥已经弃用，如果一定需要使用，需调用 `UseDeprecatedApi`。
 
 
 #### FileInfo
@@ -220,12 +220,6 @@ type FileInfo struct {
         Time        time.Time           // 文件修改时间
 
         Meta map[string]string          // Metadata 数据
-
-        /* image information */
-        ImgType   string
-        ImgWidth  int64
-        ImgHeight int64
-        ImgFrames int64
 }
 ```
 
@@ -246,7 +240,7 @@ type FormUploadResp struct {
 }
 ```
 
-`FormUploadResp` 为表单上传的返回内容的格式。其中 `Code` 字段为状态码，可以查看 [API 错误码表](https://docs.upyun.com/api/errno/)
+`FormUploadResp` 为表单上传的返回内容的格式。其中 `Code` 字段为状态码，可以查看 [API 错误码表](https://docs.upyun.com/api/errno/)。
 
 #### PutObjectConfig
 
@@ -255,21 +249,21 @@ type PutObjectConfig struct {
         Path              string                // 云存储中的路径
         LocalPath         string                // 待上传文件在本地文件系统中的路径
         Reader            io.Reader             // 待上传的内容
-        Headers           map[string]string     // 请求额外的 HTTP 头
+        Headers           map[string]string     // 额外的 HTTP 请求头
         UseMD5            bool                  // 是否需要 MD5 校验
         UseResumeUpload   bool                  // 是否使用断点续传
-        AppendContent     bool                  // 是否是追加文件内容
+        AppendContent     bool                  // 是否需要追加文件内容
         ResumePartSize    int64                 // 断点续传块大小
         MaxResumePutTries int                   // 断点续传最大重试次数
 }
 ```
 
 `PutObjectConfig` 提供上传单个文件所需的参数。有几点需要注意:
-- `LocalPath` 跟 `Reader` 是一个互斥的关系，如果设置了 `LocalPath`，SDK 就会去读取这个文件，而忽略 `Reader` 中的内容。
+- `LocalPath` 跟 `Reader` 是互斥的关系，如果设置了 `LocalPath`，SDK 就会去读取这个文件，而忽略 `Reader` 中的内容。
 - 如果 `Reader` 是一个流／缓冲等的话，需要通过 `Headers` 参数设置 `Content-Length`，SDK 默认会对 `*os.File` 增加该字段。
-- [断点续传](https://docs.upyun.com/api/rest_api/#_3)的上传内容必须是 `*os.File`, 断点续传会将文件按照 `ResumePartSize` 进行切割，然后按次序一块一块上传，如果遇到网络问题，会进行重试，重试 `MaxResumePutTries` 次，默认无限重试。
+- [断点续传](https://docs.upyun.com/api/rest_api/#_3)的上传内容类型必须是 `*os.File`, 断点续传会将文件按照 `ResumePartSize` 进行切割，然后按次序一块一块上传，如果遇到网络问题，会进行重试，重试 `MaxResumePutTries` 次，默认无限重试。
 - `AppendContent` 如果是追加文件的话，确保非最后的分片必须为 1M 的整数倍。
-- 如果需要 MD5 校验，SDK 对 `*os.File` 会自动计算 MD5 值，其他类型需要自行通过 `Headers` 参数设置 `Content-MD5`
+- 如果需要 MD5 校验，SDK 对 `*os.File` 会自动计算 MD5 值，其他类型需要自行通过 `Headers` 参数设置 `Content-MD5`。
 
 
 #### GetObjectConfig
@@ -277,13 +271,13 @@ type PutObjectConfig struct {
 ```go
 type GetObjectConfig struct {
         Path      string                    // 云存储中的路径
-        Headers   map[string]string         // 请求额外的 HTTP 头
-        LocalPath string                    // 文件本地保存路径
+        Headers   map[string]string         // 额外的 HTTP 请求头
+        LocalPath string                    // 本地文件路径
         Writer    io.Writer                 // 保存内容的容器
 }
 ```
 
-`GetObjectConfig` 提供下载单个文件所需的参数。 跟 `PutObjectConfig` 类似，`LocalPath` 跟 `Writer` 是一个互斥的关系，如果设置了 `LocalPath`，SDK 就会把内容写入到这个文件中，而忽略 `Writer`。
+`GetObjectConfig` 提供下载单个文件所需的参数。 跟 `PutObjectConfig` 类似，`LocalPath` 跟 `Writer` 是互斥的关系，如果设置了 `LocalPath`，SDK 就会把内容写入到这个文件中，而忽略 `Writer`。
 
 
 #### GetObjectsConfig
@@ -291,19 +285,19 @@ type GetObjectConfig struct {
 ```go
 type GetObjectsConfig struct {
         Path           string                   // 云存储中的路径
-        Headers        map[string]string        // 请求额外的 HTTP 头
-        ObjectsChan    chan *FileInfo           // 对象 Channel
+        Headers        map[string]string        // 额外的 HTTP 请求头
+        ObjectsChan    chan *FileInfo           // 对象通道
         QuitChan       chan bool                // 停止信号
         MaxListObjects int                      // 最大列对象个数
         MaxListTries   int                      // 列目录最大重试次数
         MaxListLevel int                        // 递归最大深度
-        DescOrder bool                          // 是否按降序列取，默认为生序
+        DescOrder bool                          // 是否按降序列取，默认为升序
 
         // Has unexported fields.
 }
 ```
 
-`GetObjectsConfig` 提供列目录所需的参数。当列目录结束后，SDK 会将 `ObjectChan` 关闭掉。
+`GetObjectsConfig` 提供列目录所需的参数。当列目录结束后，SDK 会将 `ObjectsChan` 关闭掉。
 
 
 #### DeleteObjectConfig
