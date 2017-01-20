@@ -18,9 +18,10 @@ var (
 )
 
 var up = NewUpYun(&UpYunConfig{
-	Bucket:   "prog-test",
-	Operator: "myworker",
-	Password: "tyghbnTYGHBN",
+	Bucket:   os.Getenv("UPYUN_BUCKET"),
+	Operator: os.Getenv("UPYUN_USERNAME"),
+	Password: os.Getenv("UPYUN_PASSWORD"),
+	Secret:   os.Getenv("UPYUN_SECRET"),
 })
 
 func MakeTmpPath() string {
@@ -79,6 +80,11 @@ func isNil(object interface{}) bool {
 }
 
 func TestMain(m *testing.M) {
+	_, err := up.Usage()
+	if err != nil {
+		fmt.Println("failed to login. Have set UPYUN_BUCKET UPYUN_USERNAME UPYUN_PASSWORD UPYUN_SECRET?")
+		os.Exit(-1)
+	}
 	clean := func() {
 		objs := make(chan *FileInfo, 20)
 		var wg sync.WaitGroup
