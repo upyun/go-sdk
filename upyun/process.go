@@ -77,12 +77,6 @@ func (up *UpYun) doProcessRequest(method, uri string,
 	if _, ok := kwargs["service"]; !ok {
 		kwargs["service"] = up.Bucket
 	}
-	if _, ok := kwargs["bucket"]; !ok {
-		kwargs["bucket"] = up.Bucket
-	}
-	if _, ok := kwargs["bucket_name"]; !ok {
-		kwargs["bucket_name"] = up.Bucket
-	}
 
 	if method == "GET" {
 		uri = addQueryToUri(uri, kwargs)

@@ -330,66 +330,69 @@ func (up *UpYun) List(config *GetObjectsConfig) error {
 	}
 
 	for {
-		select {
-		case <-config.QuitChan:
-			return nil
-		default:
-			resp, err := up.doRESTRequest(&restReqConfig{
-				method:  "GET",
-				uri:     config.Path,
-				headers: config.Headers,
-			})
+		resp, err := up.doRESTRequest(&restReqConfig{
+			method:  "GET",
+			uri:     config.Path,
+			headers: config.Headers,
+		})
 
-			if err != nil {
-				if _, ok := err.(net.Error); ok {
-					config.try++
-					if config.MaxListTries == 0 || config.try < config.MaxListTries {
-						continue
-					}
-				}
-				return err
-			}
-			defer resp.Body.Close()
-
-			b, err := ioutil.ReadAll(resp.Body)
-			if err != nil {
-				return fmt.Errorf("ioutil ReadAll: %v", err)
-			}
-
-			for _, fInfo := range parseBodyToFileInfos(b) {
-				config.objNum++
-				if config.MaxListObjects > 0 && config.objNum >= config.MaxListObjects {
-					return nil
-				} else {
-					if fInfo.IsDir && (config.level+1 < config.MaxListLevel || config.MaxListLevel == -1) {
-						rConfig := &GetObjectsConfig{
-							Path:           path.Join(config.Path, fInfo.Name),
-							QuitChan:       config.QuitChan,
-							ObjectsChan:    config.ObjectsChan,
-							MaxListTries:   config.MaxListTries,
-							MaxListObjects: config.MaxListObjects,
-							DescOrder:      config.DescOrder,
-							MaxListLevel:   config.MaxListLevel,
-							level:          config.level + 1,
-							rootDir:        path.Join(config.rootDir, fInfo.Name),
-							try:            config.try,
-							objNum:         config.objNum,
-						}
-						if err = up.List(rConfig); err != nil {
-							return err
-						}
-						config.try, config.objNum = rConfig.try, rConfig.objNum
-					}
-					if config.rootDir != "" {
-						fInfo.Name = path.Join(config.rootDir, fInfo.Name)
-					}
-					config.ObjectsChan <- fInfo
+		if err != nil {
+			if _, ok := err.(net.Error); ok {
+				config.try++
+				if config.MaxListTries == 0 || config.try < config.MaxListTries {
+					continue
 				}
 			}
-			config.Headers["X-List-Iter"] = resp.Header.Get("X-Upyun-List-Iter")
-			if config.Headers["X-List-Iter"] == "g2gCZAAEbmV4dGQAA2VvZg" {
+			return err
+		}
+		defer resp.Body.Close()
+
+		b, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("ioutil ReadAll: %v", err)
+		}
+
+		for _, fInfo := range parseBodyToFileInfos(b) {
+			if fInfo.IsDir && (config.level+1 < config.MaxListLevel || config.MaxListLevel == -1) {
+				rConfig := &GetObjectsConfig{
+					Path:           path.Join(config.Path, fInfo.Name),
+					QuitChan:       config.QuitChan,
+					ObjectsChan:    config.ObjectsChan,
+					MaxListTries:   config.MaxListTries,
+					MaxListObjects: config.MaxListObjects,
+					DescOrder:      config.DescOrder,
+					MaxListLevel:   config.MaxListLevel,
+					level:          config.level + 1,
+					rootDir:        path.Join(config.rootDir, fInfo.Name),
+					try:            config.try,
+					objNum:         config.objNum,
+				}
+				if err = up.List(rConfig); err != nil {
+					return err
+				}
+				config.try, config.objNum = rConfig.try, rConfig.objNum
+			}
+			if config.rootDir != "" {
+				fInfo.Name = path.Join(config.rootDir, fInfo.Name)
+			}
+
+			select {
+			case <-config.QuitChan:
+				return nil
+			default:
+				config.ObjectsChan <- fInfo
+			}
+
+			config.objNum++
+			if config.MaxListObjects > 0 && config.objNum >= config.MaxListObjects {
 				return nil
 			}
+
+		}
+
+		config.Headers["X-List-Iter"] = resp.Header.Get("X-Upyun-List-Iter")
+		if config.Headers["X-List-Iter"] == "g2gCZAAEbmV4dGQAA2VvZg" {
+			return nil
 		}
 	}
 }
