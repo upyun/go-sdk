@@ -100,7 +100,8 @@ func (up *UpYun) Mkdir(path string) error {
 		method: "POST",
 		uri:    path,
 		headers: map[string]string{
-			"folder": "true",
+			"folder":         "true",
+			"x-upyun-folder": "true",
 		},
 		closeBody: true,
 	})
@@ -323,6 +324,8 @@ func (up *UpYun) List(config *GetObjectsConfig) error {
 	if config.DescOrder {
 		config.Headers["X-List-Order"] = "desc"
 	}
+
+	config.Headers["X-UpYun-Folder"] = "true"
 
 	// 1st level
 	if config.level == 0 {

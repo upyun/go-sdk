@@ -10,11 +10,12 @@ import (
 	"runtime"
 	"sync"
 	"testing"
+	"time"
 )
 
 var (
 	ROOT       = MakeTmpPath()
-	NOTIFY_URL = "http://124.160.114.202:18989/echo?key=gosdk"
+	NOTIFY_URL = os.Getenv("UPYUN_NOTIFY")
 )
 
 var up = NewUpYun(&UpYunConfig{
@@ -25,7 +26,7 @@ var up = NewUpYun(&UpYunConfig{
 })
 
 func MakeTmpPath() string {
-	return "/go-sdk/123456789"
+	return "/go-sdk/" + time.Now().String()
 }
 
 func Equal(t *testing.T, actual, expected interface{}) {
