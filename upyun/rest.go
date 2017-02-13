@@ -348,9 +348,9 @@ func (up *UpYun) List(config *GetObjectsConfig) error {
 			}
 			return err
 		}
-		defer resp.Body.Close()
 
 		b, err := ioutil.ReadAll(resp.Body)
+		resp.Body.Close()
 		if err != nil {
 			return fmt.Errorf("ioutil ReadAll: %v", err)
 		}
