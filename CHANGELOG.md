@@ -1,5 +1,13 @@
 # UPYUN Go SDK ChangeLog
 
+## Version 2.1.0 (2017.2.14)
+
+### features
+
+1. restruct go sdk
+2. support new signature
+3. more flexible
+
 ## Version 2.0.0 (2015.12.30)
 
 ### features
