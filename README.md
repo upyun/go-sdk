@@ -1,5 +1,16 @@
 # UPYUN Go SDK
 
+添加功能
+
+- 上传指定 URL 的 body。方便上传远程图片，不需要下载到本地磁盘。
+
+```go
+up.Put(&upyun.PutObjectConfig{
+  Path:      "/demo.log",
+  URLPath: "http://img01.taobaocdn.com/bao/uploaded/i1/TB1GHAZOVXXXXc6apXXXXXXXXXX_!!0-item_pic.jpg",
+})
+```
+
 [![Build Status](https://travis-ci.org/upyun/go-sdk.svg?branch=master)](https://travis-ci.org/upyun/go-sdk)
 
     import "github.com/upyun/go-sdk/upyun"
