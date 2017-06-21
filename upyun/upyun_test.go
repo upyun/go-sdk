@@ -83,7 +83,7 @@ func isNil(object interface{}) bool {
 func TestMain(m *testing.M) {
 	_, err := up.Usage()
 	if err != nil {
-		fmt.Println("failed to login. Have set UPYUN_BUCKET UPYUN_USERNAME UPYUN_PASSWORD UPYUN_SECRET?")
+		fmt.Println("failed to login. Have set UPYUN_BUCKET UPYUN_USERNAME UPYUN_PASSWORD UPYUN_SECRET UPYUN_NOTIFY?")
 		os.Exit(-1)
 	}
 	clean := func() {
