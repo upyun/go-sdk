@@ -39,7 +39,7 @@ func (up *UpYun) CommitTasks(config *CommitTasksConfig) (taskIds []string, err e
 	kwargs := map[string]string{
 		"app_name":   config.AppName,
 		"tasks":      base64ToStr(b),
-		"notify_url": "http://10.0.2.78:9090",
+		"notify_url": config.NotifyUrl,
 
 		// for naga
 		"source": config.Source,

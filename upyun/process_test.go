@@ -149,7 +149,7 @@ func TestLiveaudit(t *testing.T) {
 }
 
 func TestFaceDetect(t *testing.T) {
-	resp, err := http.Get(FACE_URL + "/face/detection")
+	resp, err := http.Get(FACE_URL + "!/face/detection")
 	Nil(t, err)
 	defer resp.Body.Close()
 	b, err := ioutil.ReadAll(resp.Body)
