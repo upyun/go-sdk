@@ -18,6 +18,18 @@ type CommitTasksConfig struct {
 	Tasks     []interface{}
 }
 
+type LiveauditCreateTask struct {
+	Source    string
+	SaveAs    string
+	NotifyUrl string
+	Interval  string
+	Resize    string
+}
+
+type LiveauditCancelTask struct {
+	TaskId string
+}
+
 func (up *UpYun) CommitTasks(config *CommitTasksConfig) (taskIds []string, err error) {
 	b, err := json.Marshal(config.Tasks)
 	if err != nil {
@@ -27,7 +39,7 @@ func (up *UpYun) CommitTasks(config *CommitTasksConfig) (taskIds []string, err e
 	kwargs := map[string]string{
 		"app_name":   config.AppName,
 		"tasks":      base64ToStr(b),
-		"notify_url": config.NotifyUrl,
+		"notify_url": "http://10.0.2.78:9090",
 
 		// for naga
 		"source": config.Source,
@@ -123,4 +135,91 @@ func (up *UpYun) doProcessRequest(method, uri string,
 	}
 
 	return json.Unmarshal(b, v)
+}
+
+//同步任务提交
+func (up *UpYun) CommitSyncTasks(commitTask interface{}) (result map[string]interface{}, err error) {
+	var kwargs map[string]string
+	var uri string
+	var payload string
+
+	switch commitTask.(type) {
+	case LiveauditCreateTask:
+		taskConfig := commitTask.(LiveauditCreateTask)
+		kwargs = map[string]string{
+			"source":     taskConfig.Source,
+			"save_as":    taskConfig.SaveAs,
+			"notify_url": taskConfig.NotifyUrl,
+			"service":    up.Bucket,
+		}
+		if taskConfig.Interval != "" {
+			kwargs["interval"] = taskConfig.Interval
+		}
+		if taskConfig.Resize != "" {
+			kwargs["resize"] = taskConfig.Resize
+		}
+		uri = fmt.Sprintf("/%v/liveaudit/create", up.Bucket)
+
+	case LiveauditCancelTask:
+		taskConfig := commitTask.(LiveauditCancelTask)
+		kwargs = map[string]string{
+			"task_id": taskConfig.TaskId,
+			"service": up.Bucket,
+		}
+		uri = fmt.Sprintf("/%v/liveaudit/cancel", up.Bucket)
+
+	default:
+		err = fmt.Errorf("don't match any task")
+		return nil, err
+	}
+	body, err := json.Marshal(kwargs)
+	if err != nil {
+		return nil, fmt.Errorf("can't encode the json")
+	}
+	payload = string(body)
+
+	return up.doSyncProcessRequest("POST", uri, payload)
+}
+
+func (up *UpYun) doSyncProcessRequest(method, uri string, payload string) (map[string]interface{}, error) {
+	headers := make(map[string]string)
+	headers["Date"] = makeRFC1123Date(time.Now())
+	headers["Content-Type"] = "application/json"
+	headers["Content-MD5"] = md5Str(payload)
+	headers["Authorization"] = up.MakeUnifiedAuth(&UnifiedAuthConfig{
+		Method:     method,
+		Uri:        uri,
+		DateStr:    headers["Date"],
+		ContentMD5: headers["Content-MD5"],
+	})
+
+	var resp *http.Response
+	var err error
+	endpoint := up.doGetEndpoint("p1.api.upyun.com")
+	rawurl := fmt.Sprintf("http://%s%s", endpoint, uri)
+	switch method {
+	case "POST":
+		resp, err = up.doHTTPRequest(method, rawurl, headers, strings.NewReader(payload))
+	default:
+		return nil, fmt.Errorf("Unknown method")
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	b, err := ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode/100 != 2 {
+		return nil, fmt.Errorf("%d %s", resp.StatusCode, string(b))
+	}
+
+	var v map[string]interface{}
+	err = json.Unmarshal(b, &v)
+	if err != nil {
+		fmt.Println("can't unmarshal the data", string(b))
+	}
+	return v, err
 }
