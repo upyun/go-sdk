@@ -18,16 +18,8 @@ type CommitTasksConfig struct {
 	Tasks     []interface{}
 }
 
-type LiveauditCreateTask struct {
-	Source    string
-	SaveAs    string
-	NotifyUrl string
-	Interval  string
-	Resize    string
-}
-
-type LiveauditCancelTask struct {
-	TaskId string
+type SyncTaskConfig struct {
+	Param map[string]interface{}
 }
 
 func (up *UpYun) CommitTasks(config *CommitTasksConfig) (taskIds []string, err error) {
@@ -138,36 +130,21 @@ func (up *UpYun) doProcessRequest(method, uri string,
 }
 
 //同步任务提交
-func (up *UpYun) CommitSyncTasks(commitTask interface{}) (result map[string]interface{}, err error) {
-	var kwargs map[string]string
-	var uri string
+func (up *UpYun) CommitSyncTasks(commitTask interface{}, taskUri string) (result map[string]interface{}, err error) {
+	kwargs := make(map[string]interface{})
 	var payload string
+	var uri string
 
 	switch commitTask.(type) {
-	case LiveauditCreateTask:
-		taskConfig := commitTask.(LiveauditCreateTask)
-		kwargs = map[string]string{
-			"source":     taskConfig.Source,
-			"save_as":    taskConfig.SaveAs,
-			"notify_url": taskConfig.NotifyUrl,
-			"service":    up.Bucket,
+	case SyncTaskConfig:
+		taskConfig := commitTask.(SyncTaskConfig)
+		for k, v := range taskConfig.Param {
+			kwargs[k] = v
 		}
-		if taskConfig.Interval != "" {
-			kwargs["interval"] = taskConfig.Interval
+		if _, exist := kwargs["service"]; !exist {
+			kwargs["service"] = up.Bucket
 		}
-		if taskConfig.Resize != "" {
-			kwargs["resize"] = taskConfig.Resize
-		}
-		uri = fmt.Sprintf("/%v/liveaudit/create", up.Bucket)
-
-	case LiveauditCancelTask:
-		taskConfig := commitTask.(LiveauditCancelTask)
-		kwargs = map[string]string{
-			"task_id": taskConfig.TaskId,
-			"service": up.Bucket,
-		}
-		uri = fmt.Sprintf("/%v/liveaudit/cancel", up.Bucket)
-
+		uri = fmt.Sprintf("/%v%v", up.Bucket, taskUri)
 	default:
 		err = fmt.Errorf("don't match any task")
 		return nil, err

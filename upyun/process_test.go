@@ -130,19 +130,22 @@ func TestVideoaudit(t *testing.T) {
 }
 
 func TestLiveaudit(t *testing.T) {
-	result, err := up.CommitSyncTasks(LiveauditCreateTask{
-		Source:    "rtmp://live.hkstv.hk.lxdns.com/live/hks",
-		SaveAs:    JPG_SAVE_AS,
-		NotifyUrl: NOTIFY_URL,
-	})
+	result, err := up.CommitSyncTasks(SyncTaskConfig{
+		Param: map[string]interface{}{
+			"source":     "rtmp://live.hkstv.hk.lxdns.com/live/hks",
+			"save_as":    JPG_SAVE_AS,
+			"notify_url": NOTIFY_URL,
+		}}, "/liveaudit/create")
 
 	Nil(t, err)
 	Equal(t, result["status"], float64(200))
 
 	if result["status"] == float64(200) {
-		result, err := up.CommitSyncTasks(LiveauditCancelTask{
-			TaskId: result["task_id"].(string),
-		})
+		result, err := up.CommitSyncTasks(SyncTaskConfig{
+			Param: map[string]interface{}{
+				"task_id": result["task_id"].(string),
+			}}, "/liveaudit/cancel")
+
 		Nil(t, err)
 		Equal(t, result["status"], float64(200))
 	}
