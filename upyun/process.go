@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"path"
 	"strings"
 	"time"
 )
@@ -142,12 +143,6 @@ func (up *UpYun) doProcessRequest(method, uri string,
 	return json.Unmarshal(b, v)
 }
 
-/********************************************************************************************************/
-/*								            同步任务提交                                                 */
-/* 注：使用p1.api.upyun.com同步任务接口，如果任务没有单独的实现，请使用SyncCommonTask                       */
-/* SyncCommonTask.Kwargs 为请求参数map                                                                  */
-/* SyncCommonTask.TaskUri为任务uri（不包含服务名）,例如/liveaudit/create                                  */
-/*******************************************************************************************************/
 func (up *UpYun) CommitSyncTasks(commitTask interface{}) (result map[string]interface{}, err error) {
 	var kwargs map[string]interface{}
 	var uri string
@@ -168,7 +163,7 @@ func (up *UpYun) CommitSyncTasks(commitTask interface{}) (result map[string]inte
 		if taskConfig.Resize != "" {
 			kwargs["resize"] = taskConfig.Resize
 		}
-		uri = fmt.Sprintf("/%v/liveaudit/create", up.Bucket)
+		uri = path.Join("/", up.Bucket, "/liveaudit/create")
 
 	case LiveauditCancelTask:
 		taskConfig := commitTask.(LiveauditCancelTask)
@@ -176,12 +171,12 @@ func (up *UpYun) CommitSyncTasks(commitTask interface{}) (result map[string]inte
 			"task_id": taskConfig.TaskId,
 			"service": up.Bucket,
 		}
-		uri = fmt.Sprintf("/%v/liveaudit/cancel", up.Bucket)
+		uri = path.Join("/", up.Bucket, "/liveaudit/cancel")
 
 	case SyncCommonTask:
 		taskConfig := commitTask.(SyncCommonTask)
 		kwargs = taskConfig.Kwargs
-		uri = fmt.Sprintf("/%v%v", up.Bucket, taskConfig.TaskUri)
+		uri = path.Join("/", up.Bucket, taskConfig.TaskUri)
 
 	default:
 		err = fmt.Errorf("don't match any task")

@@ -188,6 +188,11 @@ func (up *UpYun) GetProgress(taskIds []string) (result map[string]int, err error
 func (up *UpYun) GetResult(taskIds []string) (result map[string]interface{}, err error)
 ```
 
+#### 提交同步处理任务
+```go
+func (up *UpYun) CommitSyncTasks(commitTask interface{}) (result map[string]interface{}, err error)
+```
+
 ---
 
 ### 基本类型
@@ -343,3 +348,43 @@ type CommitTasksConfig struct {
 ```
 
 `CommitTasksConfig` 提供提交异步任务所需的参数。`Accept` 跟 `Source` 仅与异步音视频处理有关。`Tasks` 是一个任务数组，数组中的每一个元素都是任务相关的参数（一般情况下为字典类型）。
+
+
+#### LiveauditCreateTask
+
+```go
+type LiveauditCreateTask struct {
+	Source    string
+	SaveAs    string
+	NotifyUrl string
+	Interval  string
+	Resize    string
+}
+```
+
+`LiveauditCreateTask` 提供视频直播内容识别任务创建所需参数，适用于`CommitSyncTasks`。
+
+#### LiveauditCancelTask
+
+```go
+type LiveauditCancelTask struct {
+	TaskId string
+}
+```
+
+`LiveauditCancelTask` 提供视频直播内容识别任务取消所需参数，适用于`CommitSyncTasks`。
+
+#### SyncCommonTask
+
+```go
+type SyncCommonTask struct {
+	Kwargs  map[string]interface{}
+	TaskUri string
+}
+```
+
+`SyncCommonTask` 提供同步任务所需的参数，适用于`CommitSyncTasks`。
+注：使用`p1.api.upyun.com` 同步任务接口，如果没有提供单独的接口，请使用`SyncCommonTask`。
+`Kwargs` 为请求参数map；
+`TaskUri` 为任务uri（不包含服务名）,例如`/liveaudit/create` 
+
