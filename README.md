@@ -362,7 +362,7 @@ type LiveauditCreateTask struct {
 }
 ```
 
-`LiveauditCreateTask` 提供视频直播内容识别任务创建所需参数，适用于`CommitSyncTasks`。
+`LiveauditCreateTask` 提供视频直播内容识别任务创建所需参数，适用于 `CommitSyncTasks`。
 
 #### LiveauditCancelTask
 
@@ -372,7 +372,7 @@ type LiveauditCancelTask struct {
 }
 ```
 
-`LiveauditCancelTask` 提供视频直播内容识别任务取消所需参数，适用于`CommitSyncTasks`。
+`LiveauditCancelTask` 提供视频直播内容识别任务取消所需参数，适用于 `CommitSyncTasks`。
 
 #### SyncCommonTask
 
@@ -383,8 +383,8 @@ type SyncCommonTask struct {
 }
 ```
 
-`SyncCommonTask` 提供同步任务所需的参数，适用于`CommitSyncTasks`。
-注：使用`p1.api.upyun.com` 同步任务接口，如果没有提供单独的接口，请使用`SyncCommonTask`。
-`Kwargs` 为请求参数map；
-`TaskUri` 为任务uri（不包含服务名）,例如`/liveaudit/create` 
+`SyncCommonTask` 提供同步任务所需的参数，适用于 `CommitSyncTasks`。有几点需要注意：
+- 使用 `p1.api.upyun.com` 同步任务接口，如果没有提供单独的接口，请使用 `SyncCommonTask`。
+- `Kwargs` 为请求参数。
+- `TaskUri` 为任务 `uri`，不包括服务名，例如 `/liveaudit/create`。 
 
