@@ -138,10 +138,12 @@ func TestLiveaudit(t *testing.T) {
 
 	Nil(t, err)
 	Equal(t, result["status"], float64(200))
-
 	if result["status"] == float64(200) {
-		result, err := up.CommitSyncTasks(LiveauditCancelTask{
-			TaskId: result["task_id"].(string),
+		result, err := up.CommitSyncTasks(SyncCommonTask{
+			Kwargs: map[string]interface{}{
+				"task_id": result["task_id"].(string),
+			},
+			TaskUri: "/liveaudit/cancel",
 		})
 		Nil(t, err)
 		Equal(t, result["status"], float64(200))

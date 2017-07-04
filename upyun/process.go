@@ -30,6 +30,11 @@ type LiveauditCancelTask struct {
 	TaskId string
 }
 
+type SyncCommonTask struct {
+	Kwargs  map[string]interface{}
+	TaskUri string
+}
+
 func (up *UpYun) CommitTasks(config *CommitTasksConfig) (taskIds []string, err error) {
 	b, err := json.Marshal(config.Tasks)
 	if err != nil {
@@ -137,16 +142,21 @@ func (up *UpYun) doProcessRequest(method, uri string,
 	return json.Unmarshal(b, v)
 }
 
-//同步任务提交
+/********************************************************************************************************/
+/*								            同步任务提交                                                 */
+/* 注：使用p1.api.upyun.com同步任务接口，如果任务没有单独的实现，请使用SyncCommonTask                       */
+/* SyncCommonTask.Kwargs 为请求参数map                                                                  */
+/* SyncCommonTask.TaskUri为任务uri（不包含服务名）,例如/liveaudit/create                                  */
+/*******************************************************************************************************/
 func (up *UpYun) CommitSyncTasks(commitTask interface{}) (result map[string]interface{}, err error) {
-	var kwargs map[string]string
+	var kwargs map[string]interface{}
 	var uri string
 	var payload string
 
 	switch commitTask.(type) {
 	case LiveauditCreateTask:
 		taskConfig := commitTask.(LiveauditCreateTask)
-		kwargs = map[string]string{
+		kwargs = map[string]interface{}{
 			"source":     taskConfig.Source,
 			"save_as":    taskConfig.SaveAs,
 			"notify_url": taskConfig.NotifyUrl,
@@ -162,22 +172,30 @@ func (up *UpYun) CommitSyncTasks(commitTask interface{}) (result map[string]inte
 
 	case LiveauditCancelTask:
 		taskConfig := commitTask.(LiveauditCancelTask)
-		kwargs = map[string]string{
+		kwargs = map[string]interface{}{
 			"task_id": taskConfig.TaskId,
 			"service": up.Bucket,
 		}
 		uri = fmt.Sprintf("/%v/liveaudit/cancel", up.Bucket)
 
+	case SyncCommonTask:
+		taskConfig := commitTask.(SyncCommonTask)
+		kwargs = taskConfig.Kwargs
+		uri = fmt.Sprintf("/%v%v", up.Bucket, taskConfig.TaskUri)
+
 	default:
 		err = fmt.Errorf("don't match any task")
 		return nil, err
+	}
+
+	if _, exist := kwargs["service"]; !exist {
+		kwargs["service"] = up.Bucket
 	}
 	body, err := json.Marshal(kwargs)
 	if err != nil {
 		return nil, fmt.Errorf("can't encode the json")
 	}
 	payload = string(body)
-
 	return up.doSyncProcessRequest("POST", uri, payload)
 }
 
