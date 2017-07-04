@@ -135,6 +135,7 @@ func TestLiveaudit(t *testing.T) {
 		SaveAs:    JPG_SAVE_AS,
 		NotifyUrl: NOTIFY_URL,
 	})
+
 	Nil(t, err)
 	Equal(t, result["status"], float64(200))
 
@@ -145,6 +146,7 @@ func TestLiveaudit(t *testing.T) {
 			},
 			TaskUri: "/liveaudit/cancel",
 		})
+
 		Nil(t, err)
 		Equal(t, result["status"], float64(200))
 	}

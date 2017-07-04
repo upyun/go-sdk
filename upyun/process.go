@@ -191,6 +191,7 @@ func (up *UpYun) CommitSyncTasks(commitTask interface{}) (result map[string]inte
 	if _, exist := kwargs["service"]; !exist {
 		kwargs["service"] = up.Bucket
 	}
+
 	body, err := json.Marshal(kwargs)
 	if err != nil {
 		return nil, fmt.Errorf("can't encode the json")
