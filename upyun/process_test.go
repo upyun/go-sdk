@@ -135,9 +135,9 @@ func TestLiveaudit(t *testing.T) {
 		SaveAs:    JPG_SAVE_AS,
 		NotifyUrl: NOTIFY_URL,
 	})
-
 	Nil(t, err)
 	Equal(t, result["status"], float64(200))
+
 	if result["status"] == float64(200) {
 		result, err := up.CommitSyncTasks(SyncCommonTask{
 			Kwargs: map[string]interface{}{
