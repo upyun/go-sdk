@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"path"
 	"testing"
+	"time"
 )
 
 var (
@@ -130,7 +131,7 @@ func TestVideoaudit(t *testing.T) {
 }
 
 func TestLiveaudit(t *testing.T) {
-	result, err := up.CommitSyncTasks(SyncTaskConfig{
+	result, err := up.CommitSyncTasks(&SyncTaskConfig{
 		Param: map[string]interface{}{
 			"source":     "rtmp://live.hkstv.hk.lxdns.com/live/hks",
 			"save_as":    JPG_SAVE_AS,
@@ -141,7 +142,8 @@ func TestLiveaudit(t *testing.T) {
 	Equal(t, result["status"], float64(200))
 
 	if result["status"] == float64(200) {
-		result, err := up.CommitSyncTasks(SyncTaskConfig{
+		time.Sleep(time.Second * 10)
+		result, err := up.CommitSyncTasks(&SyncTaskConfig{
 			Param: map[string]interface{}{
 				"task_id": result["task_id"].(string),
 			}}, "/liveaudit/cancel")

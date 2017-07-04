@@ -22,6 +22,10 @@ type SyncTaskConfig struct {
 	Param map[string]interface{}
 }
 
+type Reader interface {
+	getKwargs() map[string]interface{}
+}
+
 func (up *UpYun) CommitTasks(config *CommitTasksConfig) (taskIds []string, err error) {
 	b, err := json.Marshal(config.Tasks)
 	if err != nil {
@@ -130,25 +134,17 @@ func (up *UpYun) doProcessRequest(method, uri string,
 }
 
 //同步任务提交
-func (up *UpYun) CommitSyncTasks(commitTask interface{}, taskUri string) (result map[string]interface{}, err error) {
+func (up *UpYun) CommitSyncTasks(commitTask Reader, taskUri string) (result map[string]interface{}, err error) {
 	kwargs := make(map[string]interface{})
 	var payload string
 	var uri string
 
-	switch commitTask.(type) {
-	case SyncTaskConfig:
-		taskConfig := commitTask.(SyncTaskConfig)
-		for k, v := range taskConfig.Param {
-			kwargs[k] = v
-		}
-		if _, exist := kwargs["service"]; !exist {
-			kwargs["service"] = up.Bucket
-		}
-		uri = fmt.Sprintf("/%v%v", up.Bucket, taskUri)
-	default:
-		err = fmt.Errorf("don't match any task")
-		return nil, err
+	kwargs = commitTask.getKwargs()
+	if _, exist := kwargs["service"]; !exist {
+		kwargs["service"] = up.Bucket
 	}
+	uri = fmt.Sprintf("/%v%v", up.Bucket, taskUri)
+
 	body, err := json.Marshal(kwargs)
 	if err != nil {
 		return nil, fmt.Errorf("can't encode the json")
@@ -199,4 +195,8 @@ func (up *UpYun) doSyncProcessRequest(method, uri string, payload string) (map[s
 		fmt.Println("can't unmarshal the data", string(b))
 	}
 	return v, err
+}
+
+func (config *SyncTaskConfig) getKwargs() map[string]interface{} {
+	return config.Param
 }
