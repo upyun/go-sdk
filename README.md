@@ -13,35 +13,39 @@
 Table of Contents
 =================
 
-  * [UPYUN Go SDK](#upyun-go-sdk)
-    * [Projects using this SDK](#projects-using-this-sdk)
-    * [Usage](#usage)
-      * [快速上手](#快速上手)
-      * [初始化 UpYun](#初始化-upyun)
-      * [又拍云 REST API 接口](#又拍云-rest-api-接口)
-        * [获取空间存储使用量](#获取空间存储使用量)
-        * [创建目录](#创建目录)
-        * [上传](#上传)
-        * [下载](#下载)
-        * [删除](#删除)
-        * [获取文件信息](#获取文件信息)
-        * [获取文件列表](#获取文件列表)
-      * [又拍云缓存刷新接口](#又拍云缓存刷新接口)
-      * [又拍云表单上传接口](#又拍云表单上传接口)
-      * [又拍云处理接口](#又拍云处理接口)
-        * [提交处理任务](#提交处理任务)
-        * [获取处理进度](#获取处理进度)
-        * [获取处理结果](#获取处理结果)
-      * [基本类型](#基本类型)
-        * [UpYun](#upyun)
-        * [FileInfo](#fileinfo)
-        * [FormUploadResp](#formuploadresp)
-        * [PutObjectConfig](#putobjectconfig)
-        * [GetObjectConfig](#getobjectconfig)
-        * [GetObjectsConfig](#getobjectsconfig)
-        * [DeleteObjectConfig](#deleteobjectconfig)
-        * [FormUploadConfig](#formuploadconfig)
-        * [CommitTasksConfig](#committasksconfig)
+   * [UPYUN Go SDK](#upyun-go-sdk)
+      * [Projects using this SDK](#projects-using-this-sdk)
+      * [Usage](#usage)
+         * [快速上手](#快速上手)
+         * [初始化 UpYun](#初始化-upyun)
+         * [又拍云 REST API 接口](#又拍云-rest-api-接口)
+            * [获取空间存储使用量](#获取空间存储使用量)
+            * [创建目录](#创建目录)
+            * [上传](#上传)
+            * [下载](#下载)
+            * [删除](#删除)
+            * [获取文件信息](#获取文件信息)
+            * [获取文件列表](#获取文件列表)
+         * [又拍云缓存刷新接口](#又拍云缓存刷新接口)
+         * [又拍云表单上传接口](#又拍云表单上传接口)
+         * [又拍云处理接口](#又拍云处理接口)
+            * [提交处理任务](#提交处理任务)
+            * [获取处理进度](#获取处理进度)
+            * [获取处理结果](#获取处理结果)
+            * [提交同步处理任       务](#提交同步处理任务)
+         * [基本类型](#基本类型)
+            * [UpYun](#upyun)
+            * [FileInfo](#fileinfo)
+            * [FormUploadResp](#formuploadresp)
+            * [PutObjectConfig](#putobjectconfig)
+            * [GetObjectConfig](#getobjectconfig)
+            * [GetObjectsConfig](#getobjectsconfig)
+            * [DeleteObjectConfig](#deleteobjectconfig)
+            * [FormUploadConfig](#formuploadconfig)
+            * [CommitTasksConfig](#committasksconfig)
+            * [LiveauditCreateTask](#liveauditcreatetask)
+            * [LiveauditCancelTask](#liveauditcanceltask)
+            * [SyncCommonTask](#synccommontask)
 
 ## Projects using this SDK
 
@@ -221,7 +225,7 @@ type FileInfo struct {
         Size        int64               // 文件大小, 目录大小为 0
         ContentType string              // 文件 Content-Type
         IsDir       bool                // 是否为目录
-        ETag        string              // ETag 值
+        MD5         string              // MD5 值
         Time        time.Time           // 文件修改时间
 
         Meta map[string]string          // Metadata 数据
