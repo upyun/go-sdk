@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
 	"path"
 	"sort"
@@ -23,6 +24,12 @@ var (
 	LOCAL_FILE      = "./rest.go"
 	LOCAL_SAVE_FILE = LOCAL_FILE + "_bak"
 )
+
+func TestPrintEndpoint(t *testing.T) {
+	c, err := net.Dial("tcp", "v0.api.upyun.com:80")
+	Nil(t, err)
+	fmt.Printf("v0.api: %s, client_ip: %s\n", c.RemoteAddr(), c.LocalAddr())
+}
 
 func TestUsage(t *testing.T) {
 	n, err := up.Usage()
@@ -187,6 +194,11 @@ func TestList(t *testing.T) {
 	for k := range REST_OBJS {
 		Equal(t, REST_OBJS[k], files[k])
 	}
+}
+
+func TestIsNotExist(t *testing.T) {
+	_, err := up.GetInfo("/NotExist")
+	Equal(t, IsNotExist(err), true)
 }
 
 func TestModifyMetadata(t *testing.T) {
