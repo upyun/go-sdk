@@ -57,6 +57,7 @@ type GetObjectsConfig struct {
 // PutObjectConfig provides a configuration to Put method.
 type PutObjectConfig struct {
 	Path              string
+	URLPath           string
 	LocalPath         string
 	Reader            io.Reader
 	Headers           map[string]string
@@ -260,7 +261,14 @@ func (up *UpYun) resumePut(config *PutObjectConfig) error {
 }
 
 func (up *UpYun) Put(config *PutObjectConfig) (err error) {
-	if config.LocalPath != "" {
+	if config.URLPath != "" {
+		var resp *http.Response
+		if resp, err = http.Get(config.URLPath); err != nil {
+			return fmt.Errorf("get url error : %v, %v", config.URLPath, err)
+		}
+		defer resp.Body.Close()
+		config.Reader = resp.Body
+	} else if config.LocalPath != "" {
 		var fd *os.File
 		if fd, err = os.Open(config.LocalPath); err != nil {
 			return fmt.Errorf("open file: %v", err)
