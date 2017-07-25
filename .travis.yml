@@ -10,4 +10,6 @@ install:
     - go get github.com/upyun/go-sdk/upyun
 
 script:
+    - sudo apt-get update && sudo apt-get install -y dnsutils
+    - dig v0.api.upyun.com
     - cd upyun && go test -v

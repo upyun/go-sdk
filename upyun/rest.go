@@ -287,6 +287,10 @@ func (up *UpYun) Delete(config *DeleteObjectConfig) error {
 		closeBody: true,
 	})
 	if err != nil {
+		if e, ok := err.(Error); ok {
+			e.error = fmt.Errorf("delete %s: %v", config.Path, err)
+			return e
+		}
 		return fmt.Errorf("delete %s: %v", config.Path, err)
 	}
 	return nil
@@ -299,6 +303,10 @@ func (up *UpYun) GetInfo(path string) (*FileInfo, error) {
 		closeBody: true,
 	})
 	if err != nil {
+		if e, ok := err.(Error); ok {
+			e.error = fmt.Errorf("getinfo %s: %v", path, err)
+			return nil, e
+		}
 		return nil, fmt.Errorf("getinfo %s: %v", path, err)
 	}
 	fInfo := parseHeaderToFileInfo(resp.Header, true)
@@ -484,7 +492,10 @@ func (up *UpYun) doRESTRequest(config *restReqConfig) (*http.Response, error) {
 	if resp.StatusCode/100 != 2 {
 		body, _ := ioutil.ReadAll(resp.Body)
 		resp.Body.Close()
-		return resp, fmt.Errorf("%s %d %s", config.method, resp.StatusCode, string(body))
+		return resp, Error{
+			fmt.Errorf("%s %d %s", config.method, resp.StatusCode, string(body)),
+			resp.StatusCode,
+		}
 	}
 
 	if config.closeBody {
