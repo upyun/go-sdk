@@ -48,6 +48,7 @@ func parseHeaderToFileInfo(header http.Header, getinfo bool) *FileInfo {
 		fInfo.Size = parseStrToInt(header.Get("x-upyun-file-size"))
 		fInfo.IsDir = header.Get("x-upyun-file-type") == "folder"
 		fInfo.Time = time.Unix(parseStrToInt(header.Get("x-upyun-file-date")), 0)
+		fInfo.ContentType = header.Get("Content-Type")
 		fInfo.MD5 = header.Get("Content-MD5")
 	} else {
 		fInfo.Size = parseStrToInt(header.Get("Content-Length"))

@@ -170,6 +170,7 @@ func TestGetInfoFile(t *testing.T) {
 	Equal(t, fInfo.Name, REST_FILE_BUF_BUF)
 	// as append interface
 	Equal(t, fInfo.Size, int64(len(BUF_CONTENT)))
+	Equal(t, fInfo.ContentType, "application/octet-stream")
 }
 
 func TestList(t *testing.T) {
