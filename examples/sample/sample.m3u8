@@ -1,0 +1,7 @@
+#EXTM3U
+#EXT-X-VERSION:3
+#EXT-X-TARGETDURATION:11
+#EXT-X-MEDIA-SEQUENCE:0
+#EXTINF:10.041667,
+http://upyun-xiang-1.b0.upaiyun.com/sample.ts
+#EXT-X-ENDLIST
