@@ -11,6 +11,7 @@ type FileInfo struct {
 	Size        int64
 	ContentType string
 	IsDir       bool
+	IsEmptyDir  bool
 	MD5         string
 	Time        time.Time
 
