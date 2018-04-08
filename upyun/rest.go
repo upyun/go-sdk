@@ -56,13 +56,14 @@ type GetObjectsConfig struct {
 
 // PutObjectConfig provides a configuration to Put method.
 type PutObjectConfig struct {
-	Path              string
-	LocalPath         string
-	Reader            io.Reader
-	Headers           map[string]string
-	UseMD5            bool
-	UseResumeUpload   bool
-	AppendContent     bool
+	Path            string
+	LocalPath       string
+	Reader          io.Reader
+	Headers         map[string]string
+	UseMD5          bool
+	UseResumeUpload bool
+	// Append Api Deprecated
+	// AppendContent     bool
 	ResumePartSize    int64
 	MaxResumePutTries int
 }
@@ -146,12 +147,14 @@ func (up *UpYun) Get(config *GetObjectConfig) (fInfo *FileInfo, err error) {
 }
 
 func (up *UpYun) put(config *PutObjectConfig) error {
+	/* Append Api Deprecated
 	if config.AppendContent {
 		if config.Headers == nil {
 			config.Headers = make(map[string]string)
 		}
 		config.Headers["X-Upyun-Append"] = "true"
 	}
+	*/
 	_, err := up.doRESTRequest(&restReqConfig{
 		method:    "PUT",
 		uri:       config.Path,

@@ -13,12 +13,11 @@ import (
 )
 
 var (
-	REST_DIR          = path.Join(ROOT, "REST")
-	REST_FILE_1       = path.Join(REST_DIR, "FILE_1")
-	REST_FILE_BUF     = path.Join(REST_DIR, "FILE_BUF")
-	REST_FILE_1M      = path.Join(REST_DIR, "FILE_1M")
-	REST_FILE_BUF_BUF = path.Join(REST_DIR, "文件_BUF_BUF")
-	REST_OBJS         = []string{"FILE_1", "FILE_1M", "FILE_BUF", "文件_BUF_BUF"}
+	REST_DIR      = path.Join(ROOT, "REST")
+	REST_FILE_1   = path.Join(REST_DIR, "FILE_1")
+	REST_FILE_BUF = path.Join(REST_DIR, "FILE_BUF")
+	REST_FILE_1M  = path.Join(REST_DIR, "FILE_1M")
+	REST_OBJS     = []string{"FILE_1", "FILE_1M", "FILE_BUF"}
 
 	BUF_CONTENT     = "UPYUN GO SDK"
 	LOCAL_FILE      = "./rest.go"
@@ -80,6 +79,7 @@ func TestPutWithBuffer(t *testing.T) {
 	Nil(t, err)
 }
 
+/*
 func TestPutWithBufferAppend(t *testing.T) {
 	s := BUF_CONTENT
 	for k := 0; k < 3; k++ {
@@ -100,6 +100,7 @@ func TestPutWithBufferAppend(t *testing.T) {
 		}
 	}
 }
+*/
 
 func TestResumePut(t *testing.T) {
 	fname := "1M"
@@ -163,11 +164,11 @@ func TestGetWithLocalPath(t *testing.T) {
 }
 
 func TestGetInfoFile(t *testing.T) {
-	fInfo, err := up.GetInfo(REST_FILE_BUF_BUF)
+	fInfo, err := up.GetInfo(REST_FILE_BUF)
 	Nil(t, err)
 	NotNil(t, fInfo)
 	Equal(t, fInfo.IsDir, false)
-	Equal(t, fInfo.Name, REST_FILE_BUF_BUF)
+	Equal(t, fInfo.Name, REST_FILE_BUF)
 	// as append interface
 	Equal(t, fInfo.Size, int64(len(BUF_CONTENT)))
 	Equal(t, fInfo.ContentType, "application/octet-stream")
