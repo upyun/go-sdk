@@ -381,6 +381,10 @@ func (up *UpYun) List(config *GetObjectsConfig) error {
 				if err = up.List(rConfig); err != nil {
 					return err
 				}
+				// empty folder
+				if config.objNum == rConfig.objNum {
+					fInfo.IsEmptyDir = true
+				}
 				config.try, config.objNum = rConfig.try, rConfig.objNum
 			}
 			if config.rootDir != "" {
