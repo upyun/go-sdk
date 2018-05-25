@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 )
 
 var (
@@ -204,7 +205,6 @@ func TestIsNotExist(t *testing.T) {
 }
 
 func TestModifyMetadata(t *testing.T) {
-	//	time.Sleep(10 * time.Second)
 	err := up.ModifyMetadata(&ModifyMetadataConfig{
 		Path:      REST_FILE_1,
 		Operation: "replace",
@@ -214,6 +214,34 @@ func TestModifyMetadata(t *testing.T) {
 	})
 
 	Nil(t, err)
+}
+
+func TestRangeList(t *testing.T) {
+	ch := make(chan *FileInfo, 10)
+	files := []string{}
+
+	time.Sleep(5 * time.Second)
+
+	go func() {
+		err := up.RangeList(&RangeObjectsConfig{
+			StartTimestamp: START_TIME,
+			ObjectsChan:    ch,
+		})
+		Nil(t, err)
+	}()
+
+	for fInfo := range ch {
+		if strings.HasPrefix("/"+fInfo.Name, REST_DIR) {
+			files = append(files, "/"+fInfo.Name)
+		}
+	}
+
+	Equal(t, len(files), len(REST_OBJS))
+	sort.Strings(files)
+	sort.Strings(REST_OBJS)
+	for k := range REST_OBJS {
+		Equal(t, path.Join(REST_DIR, REST_OBJS[k]), files[k])
+	}
 }
 
 func TestDelete(t *testing.T) {
