@@ -8,7 +8,7 @@
 - [又拍云 HTTP REST 接口](http://docs.upyun.com/api/rest_api/)
 - [又拍云 HTTP FORM 接口](http://docs.upyun.com/api/form_api/)
 - [又拍云缓存刷新接口](http://docs.upyun.com/api/purge/)
-- [又拍云视频处理接口](http://docs.upyun.com/api/av_pretreatment/)
+- [又拍云视频处理接口](http://docs.upyun.com/cloud/av/)
 
 Table of Contents
 =================
