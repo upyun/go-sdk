@@ -429,11 +429,7 @@ func (up *UpYun) ModifyMetadata(config *ModifyMetadataConfig) error {
 }
 
 func (up *UpYun) doRESTRequest(config *restReqConfig) (*http.Response, error) {
-	escUri, err := escapeUri(config.uri)
-	if err != nil {
-		return nil, err
-	}
-	escUri = path.Join("/", up.Bucket, escUri)
+	escUri := path.Join("/", up.Bucket, escapeUri(config.uri))
 	if strings.HasSuffix(config.uri, "/") {
 		escUri += "/"
 	}
