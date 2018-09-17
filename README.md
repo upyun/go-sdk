@@ -1,6 +1,9 @@
 # UPYUN Go SDK
 
+[![Release Version](https://img.shields.io/github/release/upyun/go-sdk.svg)](https://github.com/upyun/go-sdk/releases/latest)
 [![Build Status](https://travis-ci.org/upyun/go-sdk.svg?branch=master)](https://travis-ci.org/upyun/go-sdk)
+[![Go Report Card](https://goreportcard.com/badge/github.com/upyun/go-sdk)](https://goreportcard.com/report/github.com/upyun/go-sdk)
+[![Sourcegraph](https://sourcegraph.com/github.com/upyun/go-sdk/-/badge.svg)](https://sourcegraph.com/github.com/upyun/go-sdk?badge)
 
     import "github.com/upyun/go-sdk/upyun"
 
