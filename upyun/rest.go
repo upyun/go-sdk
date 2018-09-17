@@ -20,6 +20,7 @@ const (
 type restReqConfig struct {
 	method    string
 	uri       string
+	query     string
 	headers   map[string]string
 	closeBody bool
 	httpBody  io.Reader
@@ -83,7 +84,8 @@ func (up *UpYun) Usage() (n int64, err error) {
 	var resp *http.Response
 	resp, err = up.doRESTRequest(&restReqConfig{
 		method: "GET",
-		uri:    "/?usage",
+		uri:    "/",
+		query:  "usage",
 	})
 
 	if err == nil {
@@ -421,7 +423,8 @@ func (up *UpYun) ModifyMetadata(config *ModifyMetadataConfig) error {
 	}
 	_, err := up.doRESTRequest(&restReqConfig{
 		method:    "PATCH",
-		uri:       config.Path + "?metadata=" + config.Operation,
+		uri:       config.Path,
+		query:     "metadata=" + config.Operation,
 		headers:   config.Headers,
 		closeBody: true,
 	})
@@ -432,6 +435,9 @@ func (up *UpYun) doRESTRequest(config *restReqConfig) (*http.Response, error) {
 	escUri := path.Join("/", up.Bucket, escapeUri(config.uri))
 	if strings.HasSuffix(config.uri, "/") {
 		escUri += "/"
+	}
+	if config.query != "" {
+		escUri += "?" + config.query
 	}
 
 	headers := map[string]string{}
