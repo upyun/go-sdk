@@ -53,7 +53,7 @@ func TestPutWithFileReader(t *testing.T) {
 	NotNil(t, fd)
 	defer fd.Close()
 
-	err := up.Put(&PutObjectConfig{
+	_, err := up.Put(&PutObjectConfig{
 		Path:   REST_FILE_1,
 		Reader: fd,
 		Headers: map[string]string{
@@ -68,7 +68,7 @@ func TestPutWithBuffer(t *testing.T) {
 	s := BUF_CONTENT
 	r := strings.NewReader(s)
 
-	err := up.Put(&PutObjectConfig{
+	_, err := up.Put(&PutObjectConfig{
 		Path:   REST_FILE_BUF,
 		Reader: r,
 		Headers: map[string]string{
@@ -114,7 +114,7 @@ func TestResumePut(t *testing.T) {
 
 	defer os.RemoveAll(fname)
 
-	err := up.Put(&PutObjectConfig{
+	_, err := up.Put(&PutObjectConfig{
 		Path:            REST_FILE_1M,
 		LocalPath:       fname,
 		UseMD5:          true,

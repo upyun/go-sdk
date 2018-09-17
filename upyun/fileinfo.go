@@ -2,6 +2,7 @@ package upyun
 
 import (
 	"net/http"
+	"path"
 	"strings"
 	"time"
 )
@@ -32,8 +33,10 @@ type FileInfo struct {
   x-upyun-width: 500
   x-upyun-frames: 90
 */
-func parseHeaderToFileInfo(header http.Header, getinfo bool) *FileInfo {
-	fInfo := &FileInfo{}
+func parseHeaderToFileInfo(name string, header http.Header, getinfo bool) *FileInfo {
+	fInfo := &FileInfo{
+		Name: path.Join("/", name),
+	}
 	for k, v := range header {
 		lk := strings.ToLower(k)
 		if strings.HasPrefix(lk, "x-upyun-meta-") {
