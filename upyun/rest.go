@@ -368,6 +368,7 @@ func (up *UpYun) List(config *GetObjectsConfig) error {
 			return fmt.Errorf("ioutil ReadAll: %v", err)
 		}
 
+		config.Headers["X-List-Iter"] = resp.Header.Get("X-Upyun-List-Iter")
 		for _, fInfo := range parseBodyToFileInfos(b) {
 			if fInfo.IsDir && (config.level+1 < config.MaxListLevel || config.MaxListLevel == -1) {
 				rConfig := &GetObjectsConfig{
@@ -410,7 +411,6 @@ func (up *UpYun) List(config *GetObjectsConfig) error {
 
 		}
 
-		config.Headers["X-List-Iter"] = resp.Header.Get("X-Upyun-List-Iter")
 		if config.Headers["X-List-Iter"] == "g2gCZAAEbmV4dGQAA2VvZg" {
 			return nil
 		}
