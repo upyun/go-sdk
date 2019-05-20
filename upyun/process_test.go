@@ -129,28 +129,28 @@ func TestVideoaudit(t *testing.T) {
 	Equal(t, len(ids), 1)
 }
 
-func TestLiveaudit(t *testing.T) {
-	result, err := up.CommitSyncTasks(LiveauditCreateTask{
-		Source:    "rtmp://live.hkstv.hk.lxdns.com/live/hks",
-		SaveAs:    JPG_SAVE_AS,
-		NotifyUrl: NOTIFY_URL,
-	})
+// func TestLiveaudit(t *testing.T) {
+// 	result, err := up.CommitSyncTasks(LiveauditCreateTask{
+// 		Source:    "rtmp://live.hkstv.hk.lxdns.com/live/hks",
+// 		SaveAs:    JPG_SAVE_AS,
+// 		NotifyUrl: NOTIFY_URL,
+// 	})
 
-	Nil(t, err)
-	Equal(t, result["status"], float64(200))
+// 	Nil(t, err)
+// 	Equal(t, result["status"], float64(200))
 
-	if result["status"] == float64(200) {
-		result, err := up.CommitSyncTasks(SyncCommonTask{
-			Kwargs: map[string]interface{}{
-				"task_id": result["task_id"].(string),
-			},
-			TaskUri: "/liveaudit/cancel",
-		})
+// 	if result["status"] == float64(200) {
+// 		result, err := up.CommitSyncTasks(SyncCommonTask{
+// 			Kwargs: map[string]interface{}{
+// 				"task_id": result["task_id"].(string),
+// 			},
+// 			TaskUri: "/liveaudit/cancel",
+// 		})
 
-		Nil(t, err)
-		Equal(t, result["status"], float64(200))
-	}
-}
+// 		Nil(t, err)
+// 		Equal(t, result["status"], float64(200))
+// 	}
+// }
 
 func TestFaceDetect(t *testing.T) {
 	resp, err := http.Get(FACE_URL + "!/face/detection")
