@@ -128,7 +128,7 @@ func (up *UpYun) Mkdir(path string) error
 #### 上传
 
 ```go
-func (up *UpYun) Put(config *PutObjectConfig) (err error)
+func (up *UpYun) Put(config *PutObjectConfig) (fInfo *FileInfo, err error)
 ```
 
 #### 下载

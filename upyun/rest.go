@@ -139,8 +139,7 @@ func (up *UpYun) Get(config *GetObjectConfig) (fInfo *FileInfo, err error) {
 	}
 	defer resp.Body.Close()
 
-	fInfo = parseHeaderToFileInfo(resp.Header, false)
-	fInfo.Name = config.Path
+	fInfo = parseHeaderToFileInfo(config.Path, resp.Header, false)
 
 	if fInfo.Size, err = io.Copy(config.Writer, resp.Body); err != nil {
 		return nil, fmt.Errorf("io copy: %v", err)
@@ -149,7 +148,7 @@ func (up *UpYun) Get(config *GetObjectConfig) (fInfo *FileInfo, err error) {
 	return
 }
 
-func (up *UpYun) put(config *PutObjectConfig) error {
+func (up *UpYun) put(config *PutObjectConfig) (*FileInfo, error) {
 	/* Append Api Deprecated
 	if config.AppendContent {
 		if config.Headers == nil {
@@ -158,7 +157,8 @@ func (up *UpYun) put(config *PutObjectConfig) error {
 		config.Headers["X-Upyun-Append"] = "true"
 	}
 	*/
-	_, err := up.doRESTRequest(&restReqConfig{
+
+	resp, err := up.doRESTRequest(&restReqConfig{
 		method:    "PUT",
 		uri:       config.Path,
 		headers:   config.Headers,
@@ -167,21 +167,22 @@ func (up *UpYun) put(config *PutObjectConfig) error {
 		useMD5:    config.UseMD5,
 	})
 	if err != nil {
-		return fmt.Errorf("doRESTRequest: %v", err)
+		return nil, fmt.Errorf("doRESTRequest: %v", err)
 	}
-	return nil
+
+	return parseHeaderToFileInfo(config.Path, resp.Header, false), nil
 }
 
 // TODO: progress
-func (up *UpYun) resumePut(config *PutObjectConfig) error {
+func (up *UpYun) resumePut(config *PutObjectConfig) (*FileInfo, error) {
 	f, ok := config.Reader.(*os.File)
 	if !ok {
-		return fmt.Errorf("resumePut: type != *os.File")
+		return nil, fmt.Errorf("resumePut: type != *os.File")
 	}
 
 	fileinfo, err := f.Stat()
 	if err != nil {
-		return fmt.Errorf("Stat: %v", err)
+		return nil, fmt.Errorf("Stat: %v", err)
 	}
 
 	fsize := fileinfo.Size()
@@ -224,7 +225,7 @@ func (up *UpYun) resumePut(config *PutObjectConfig) error {
 
 		fragFile, err := newFragmentFile(f, curSize, partSize)
 		if err != nil {
-			return fmt.Errorf("newFragmentFile: %v", err)
+			return nil, fmt.Errorf("newFragmentFile: %v", err)
 		}
 
 		try := 0
@@ -242,34 +243,37 @@ func (up *UpYun) resumePut(config *PutObjectConfig) error {
 				break
 			}
 			if _, ok := err.(net.Error); !ok {
-				return fmt.Errorf("doRESTRequest: %v", err)
+				return nil, fmt.Errorf("doRESTRequest: %v", err)
 			}
 			fragFile.Seek(0, 0)
 		}
 
 		if config.MaxResumePutTries > 0 && try == config.MaxResumePutTries {
-			return err
+			return nil, err
 		}
 
 		if id == 0 {
 			headers["X-Upyun-Multi-UUID"] = resp.Header.Get("X-Upyun-Multi-UUID")
 		} else {
 			if id == maxPartID {
-				return nil
+				if resp != nil {
+					return parseHeaderToFileInfo(config.Path, resp.Header, false), nil
+				}
+				return nil, nil
 			}
 		}
 
 		curSize += partSize
 	}
 
-	return nil
+	return nil, nil
 }
 
-func (up *UpYun) Put(config *PutObjectConfig) (err error) {
+func (up *UpYun) Put(config *PutObjectConfig) (fInfo *FileInfo, err error) {
 	if config.LocalPath != "" {
 		var fd *os.File
 		if fd, err = os.Open(config.LocalPath); err != nil {
-			return fmt.Errorf("open file: %v", err)
+			return nil, fmt.Errorf("open file: %v", err)
 		}
 		defer fd.Close()
 		config.Reader = fd
@@ -318,8 +322,7 @@ func (up *UpYun) GetInfo(path string) (*FileInfo, error) {
 		}
 		return nil, fmt.Errorf("getinfo %s: %v", path, err)
 	}
-	fInfo := parseHeaderToFileInfo(resp.Header, true)
-	fInfo.Name = path
+	fInfo := parseHeaderToFileInfo(path, resp.Header, true)
 	return fInfo, nil
 }
 
