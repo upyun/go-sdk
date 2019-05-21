@@ -70,8 +70,9 @@ type PutObjectConfig struct {
 }
 
 type DeleteObjectConfig struct {
-	Path  string
-	Async bool
+	Path   string
+	Async  bool
+	Folder bool //optional
 }
 
 type ModifyMetadataConfig struct {
@@ -284,6 +285,9 @@ func (up *UpYun) Delete(config *DeleteObjectConfig) error {
 	headers := map[string]string{}
 	if config.Async == true {
 		headers["x-upyun-async"] = "true"
+	}
+	if config.Folder {
+		headers["x-upyun-folder"] = "true"
 	}
 	_, err := up.doRESTRequest(&restReqConfig{
 		method:    "DELETE",
