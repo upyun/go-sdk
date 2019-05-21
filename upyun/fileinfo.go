@@ -62,3 +62,47 @@ func parseHeaderToFileInfo(header http.Header, getinfo bool) *FileInfo {
 	}
 	return fInfo
 }
+
+func parseBodyToFileInfos(b []byte) (fInfos []*FileInfo) {
+	line := strings.Split(string(b), "\n")
+	for _, l := range line {
+		if len(l) == 0 {
+			continue
+		}
+		items := strings.Split(l, "\t")
+		if len(items) != 4 {
+			continue
+		}
+
+		fInfos = append(fInfos, &FileInfo{
+			Name:  items[0],
+			IsDir: items[1] == "F",
+			Size:  int64(parseStrToInt(items[2])),
+			Time:  time.Unix(parseStrToInt(items[3]), 0),
+		})
+	}
+	return
+}
+
+func parseRangeListToFileInfos(b []byte) (fInfos []*FileInfo) {
+	line := strings.Split(string(b), "\n")
+	for _, l := range line {
+		if len(l) == 0 {
+			continue
+		}
+		items := strings.Split(l, "\t")
+		if len(items) != 5 {
+			continue
+		}
+
+		fInfos = append(fInfos, &FileInfo{
+			Name:        items[0],
+			IsDir:       false,
+			ContentType: items[1],
+			Size:        int64(parseStrToInt(items[2])),
+			Time:        time.Unix(parseStrToInt(items[3]), 0),
+			MD5:         items[4],
+		})
+	}
+	return
+}

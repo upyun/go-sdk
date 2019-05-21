@@ -15,6 +15,7 @@ import (
 
 var (
 	ROOT       = MakeTmpPath()
+	START_TIME = time.Now().Unix()
 	NOTIFY_URL = os.Getenv("UPYUN_NOTIFY")
 )
 

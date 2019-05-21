@@ -29,6 +29,7 @@ Table of Contents
             * [删除](#删除)
             * [获取文件信息](#获取文件信息)
             * [获取文件列表](#获取文件列表)
+            * [获取获取指定时间段内增量文件列表](#获取指定时间段内增量文件列表)
          * [又拍云缓存刷新接口](#又拍云缓存刷新接口)
          * [又拍云表单上传接口](#又拍云表单上传接口)
          * [又拍云处理接口](#又拍云处理接口)
@@ -43,6 +44,7 @@ Table of Contents
             * [PutObjectConfig](#putobjectconfig)
             * [GetObjectConfig](#getobjectconfig)
             * [GetObjectsConfig](#getobjectsconfig)
+            * [RangeObjectsConfig](#rangeobjectsconfig)
             * [DeleteObjectConfig](#deleteobjectconfig)
             * [FormUploadConfig](#formuploadconfig)
             * [CommitTasksConfig](#committasksconfig)
@@ -153,6 +155,11 @@ func (up *UpYun) GetInfo(path string) (*FileInfo, error)
 
 ```go
 func (up *UpYun) List(config *GetObjectsConfig) error
+```
+
+#### 获取指定时间段内增量文件列表
+```go
+func (up *UpYun) RangeList(config *RangeObjectsConfig) error
 ```
 
 ---
@@ -310,6 +317,22 @@ type GetObjectsConfig struct {
 ```
 
 `GetObjectsConfig` 提供列目录所需的参数。当列目录结束后，SDK 会将 `ObjectsChan` 关闭掉。
+
+
+#### RangeObjectsConfig
+
+```go
+type RangeObjectsConfig struct {
+        StartTimestamp int64                    // 开始时间戳
+        EndTimestamp   int64                    // 结束时间戳
+        Headers        map[string]string        // 额外的 HTTP 请求头
+        ObjectsChan    chan *FileInfo           // 对象通道
+        QuitChan       chan bool                // 停止信号
+        MaxListTries   int                      // 列目录最大重试次数
+}
+```
+
+`RangeObjectsConfig` 提供获取指定时间段内增量文件所需的参数。当列目录结束后，SDK 会将 `ObjectsChan` 关闭掉。
 
 
 #### DeleteObjectConfig

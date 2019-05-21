@@ -55,6 +55,16 @@ type GetObjectsConfig struct {
 	try     int
 }
 
+// RangeObjectsConfig provides a configuration to RangeList method.
+type RangeObjectsConfig struct {
+	StartTimestamp int64
+	EndTimestamp   int64
+	ObjectsChan    chan *FileInfo
+	QuitChan       chan bool
+	Headers        map[string]string
+	MaxListTries   int
+}
+
 // PutObjectConfig provides a configuration to Put method.
 type PutObjectConfig struct {
 	Path            string
@@ -412,6 +422,65 @@ func (up *UpYun) List(config *GetObjectsConfig) error {
 				return nil
 			}
 
+		}
+
+		config.Headers["X-List-Iter"] = resp.Header.Get("X-Upyun-List-Iter")
+		if config.Headers["X-List-Iter"] == "g2gCZAAEbmV4dGQAA2VvZg" {
+			return nil
+		}
+	}
+}
+
+func (up *UpYun) RangeList(config *RangeObjectsConfig) error {
+	if config.ObjectsChan == nil {
+		return fmt.Errorf("ObjectsChan == nil")
+	}
+	if config.Headers == nil {
+		config.Headers = make(map[string]string)
+	}
+	if config.QuitChan == nil {
+		config.QuitChan = make(chan bool)
+	}
+	if _, exist := config.Headers["X-List-Limit"]; !exist {
+		config.Headers["X-List-Limit"] = "50"
+	}
+	if config.StartTimestamp != 0 {
+		config.Headers["X-List-Start"] = fmt.Sprint(config.StartTimestamp)
+	}
+	if config.EndTimestamp != 0 {
+		config.Headers["X-List-End"] = fmt.Sprint(config.EndTimestamp)
+	}
+	defer close(config.ObjectsChan)
+
+	try := 0
+	for {
+		resp, err := up.doRESTRequest(&restReqConfig{
+			method:  "GET",
+			uri:     "/?files",
+			headers: config.Headers,
+		})
+		if err != nil {
+			if _, ok := err.(net.Error); ok {
+				try++
+				if config.MaxListTries == 0 || try < config.MaxListTries {
+					continue
+				}
+			}
+			return err
+		}
+
+		b, err := ioutil.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			return fmt.Errorf("ioutil ReadAll: %v", err)
+		}
+
+		for _, fInfo := range parseRangeListToFileInfos(b) {
+			select {
+			case config.ObjectsChan <- fInfo:
+			case <-config.QuitChan:
+				return nil
+			}
 		}
 
 		config.Headers["X-List-Iter"] = resp.Header.Get("X-Upyun-List-Iter")
