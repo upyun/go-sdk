@@ -119,10 +119,10 @@ func (up *UpYun) doProcessRequest(method, uri string,
 	rawurl := fmt.Sprintf("http://%s%s", endpoint, uri)
 	switch method {
 	case "GET":
-		resp, err = up.doHTTPRequest(method, rawurl, headers, nil)
+		resp, err = up.doHTTPRequest(method, rawurl, headers, nil, nil)
 	case "POST":
 		payload := encodeQueryToPayload(kwargs)
-		resp, err = up.doHTTPRequest(method, rawurl, headers, bytes.NewBufferString(payload))
+		resp, err = up.doHTTPRequest(method, rawurl, headers, bytes.NewBufferString(payload), nil)
 	default:
 		return fmt.Errorf("Unknown method")
 	}
@@ -213,7 +213,7 @@ func (up *UpYun) doSyncProcessRequest(method, uri string, payload string) (map[s
 	rawurl := fmt.Sprintf("http://%s%s", endpoint, uri)
 	switch method {
 	case "POST":
-		resp, err = up.doHTTPRequest(method, rawurl, headers, strings.NewReader(payload))
+		resp, err = up.doHTTPRequest(method, rawurl, headers, strings.NewReader(payload), nil)
 	default:
 		return nil, fmt.Errorf("Unknown method")
 	}

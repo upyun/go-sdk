@@ -14,12 +14,12 @@ const (
 )
 
 type UpYunConfig struct {
-	Bucket    string
-	Operator  string
-	Password  string
-	Secret    string // deprecated
-	Hosts     map[string]string
-	UserAgent string
+	Bucket       string
+	Operator     string
+	Password     string
+	Secret       string // deprecated
+	Hosts        map[string]string
+	UserAgent    string
 }
 
 type UpYun struct {

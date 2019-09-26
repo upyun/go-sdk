@@ -1,13 +1,16 @@
 package upyun
 
 import (
+	"crypto/md5"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -16,6 +19,7 @@ import (
 var (
 	ROOT       = MakeTmpPath()
 	NOTIFY_URL = os.Getenv("UPYUN_NOTIFY")
+	TEMP_DIR   = "./.temp"
 )
 
 var up = NewUpYun(&UpYunConfig{
@@ -26,7 +30,24 @@ var up = NewUpYun(&UpYunConfig{
 })
 
 func MakeTmpPath() string {
-	return "/go-sdk/" + time.Now().String()
+	return "/go-sdk/" + fmt.Sprint(time.Now().UnixNano())
+}
+func TempKey(t *testing.T) string {
+	return path.Join(ROOT, fmt.Sprint(time.Now().UnixNano()))
+}
+func TempLocalFile(t *testing.T) string {
+	name := "go-sdk" + "-" + fmt.Sprint(time.Now().UnixNano())
+	name = strings.Replace(name, "/", "_", -1)
+	d := path.Join(TEMP_DIR, name)
+	os.MkdirAll(TEMP_DIR, 0755)
+	return d
+}
+func TempLocalDir(t *testing.T) string {
+	name := "go-sdk" + "-" + fmt.Sprint(time.Now().UnixNano())
+	name = strings.Replace(name, "/", "_", -1)
+	d := path.Join(TEMP_DIR, name)
+	os.MkdirAll(d, 0755)
+	return d
 }
 
 func Equal(t *testing.T, actual, expected interface{}) {
@@ -50,7 +71,7 @@ func NotEqual(t *testing.T, actual, expected interface{}) {
 func Nil(t *testing.T, object interface{}) {
 	if !isNil(object) {
 		_, file, line, _ := runtime.Caller(1)
-		t.Logf("\033[31m%s:%d:\n\n\t   <nil> (expected)\n\n\t!= %#v (actual)\033[39m\n\n",
+		t.Logf("\033[31m%s:%d:\n\n\t   <nil> (expected)\n\n\t!= %+v (actual)\033[39m\n\n",
 			filepath.Base(file), line, object)
 		t.FailNow()
 	}
@@ -80,10 +101,39 @@ func isNil(object interface{}) bool {
 
 }
 
+func computeMD5(filePath string, resume bool) (string, error) {
+	hash := md5.New()
+	f, err := os.Open(filePath)
+	if err != nil {
+		return "", err
+	}
+	if resume {
+		stat, err := f.Stat()
+		if err != nil {
+			return "", err
+		}
+		size := stat.Size()
+		count := (size + DefaultPartSize - 1) / DefaultPartSize
+		for i := int64(0); i < count; i++ {
+			innerHash := md5.New()
+			if _, err := io.Copy(innerHash, io.LimitReader(f, DefaultPartSize)); err != nil {
+				return "", err
+			}
+			hash.Write([]byte(fmt.Sprintf("%x", innerHash.Sum(nil))))
+		}
+	} else {
+		if _, err := io.Copy(hash, f); err != nil {
+			return "", err
+		}
+	}
+	hash.Sum(nil)
+	return fmt.Sprintf("%x", hash.Sum(nil)), nil
+}
+
 func TestMain(m *testing.M) {
 	_, err := up.Usage()
 	if err != nil {
-		fmt.Println("failed to login. Have set UPYUN_BUCKET UPYUN_USERNAME UPYUN_PASSWORD UPYUN_SECRET UPYUN_NOTIFY?")
+		fmt.Println("failed to login. Have set UPYUN_BUCKET UPYUN_USERNAME UPYUN_PASSWORD UPYUN_SECRET UPYUN_NOTIFY?", err)
 		os.Exit(-1)
 	}
 	clean := func() {

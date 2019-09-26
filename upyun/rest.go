@@ -1,6 +1,8 @@
 package upyun
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -8,13 +10,16 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
 
 const (
-	defaultResumePartSize = 1024 * 1024
-	minResumePutFileSize  = 10 * 1024 * 1024
+	DefaultPartSize      = 1024 * 1024
+	MaxPartNum           = 10000
+	minResumePutFileSize = 10 * 1024 * 1024
 )
 
 type restReqConfig struct {
@@ -25,6 +30,7 @@ type restReqConfig struct {
 	closeBody bool
 	httpBody  io.Reader
 	useMD5    bool
+	listener  ProgressListener
 }
 
 // GetObjectConfig provides a configuration to Get method.
@@ -67,6 +73,33 @@ type PutObjectConfig struct {
 	// AppendContent     bool
 	ResumePartSize    int64
 	MaxResumePutTries int
+	Listener          ProgressListener
+}
+
+//UploadFileConfig is multipart file upload config
+type UploadFileConfig struct {
+	Path          string
+	LocalPath     string
+	PartSize      int64
+	Listener      ProgressListener
+	Parallel      int
+	CheckPointDir string
+}
+type UploadPartConfig struct {
+	Reader   io.Reader
+	PartSize int64
+	PartID   int
+}
+type InitMultipartUploadConfig struct {
+	Path          string
+	PartSize      int64
+	ContentLength int64 //optional
+	ContentType   string
+}
+type InitMultipartUploadResult struct {
+	UploadID string
+	Path     string
+	PartSize int64
 }
 
 type DeleteObjectConfig struct {
@@ -79,6 +112,31 @@ type ModifyMetadataConfig struct {
 	Path      string
 	Operation string
 	Headers   map[string]string
+}
+
+type ListMultipartConfig struct {
+	Prefix string
+	Limit  int64
+}
+type ListMultipartPartsConfig struct {
+	BeginID int
+}
+type MultipartUploadFile struct {
+	Key       string `json:"key"`
+	UUID      string `json:"uuid"`
+	Completed bool   `json:"completed"`
+	CreatedAt int64  `json:"created_at"`
+}
+type ListMultipartUploadResult struct {
+	Files []*MultipartUploadFile `json:"files"`
+}
+type MultipartUploadedPart struct {
+	Etag string `json:"etag"`
+	Size int64  `json:"size"`
+	Id   int    `json:"id"`
+}
+type ListUploadedPartsResult struct {
+	Parts []*MultipartUploadedPart `json:"parts"`
 }
 
 func (up *UpYun) Usage() (n int64, err error) {
@@ -165,6 +223,7 @@ func (up *UpYun) put(config *PutObjectConfig) error {
 		closeBody: true,
 		httpBody:  config.Reader,
 		useMD5:    config.UseMD5,
+		listener:  config.Listener,
 	})
 	if err != nil {
 		return fmt.Errorf("doRESTRequest: %v", err)
@@ -172,7 +231,23 @@ func (up *UpYun) put(config *PutObjectConfig) error {
 	return nil
 }
 
-// TODO: progress
+func getPartInfo(partSize, fsize int64) (int64, int64, error) {
+	if partSize <= 0 {
+		partSize = DefaultPartSize
+	}
+	if partSize < DefaultPartSize {
+		return 0, 0, fmt.Errorf("The minimum of part size is %d", DefaultPartSize)
+	}
+	if partSize%DefaultPartSize != 0 {
+		return 0, 0, fmt.Errorf("The part size is a multiple of %d", DefaultPartSize)
+	}
+
+	partNum := (fsize + partSize - 1) / partSize
+	if partNum > MaxPartNum {
+		return 0, 0, fmt.Errorf("The maximum part number is  %d", MaxPartNum)
+	}
+	return partSize, partNum, nil
+}
 func (up *UpYun) resumePut(config *PutObjectConfig) error {
 	f, ok := config.Reader.(*os.File)
 	if !ok {
@@ -189,17 +264,22 @@ func (up *UpYun) resumePut(config *PutObjectConfig) error {
 		return up.put(config)
 	}
 
-	if config.ResumePartSize == 0 {
-		config.ResumePartSize = defaultResumePartSize
+	partSize, partNum, err := getPartInfo(config.ResumePartSize, fsize)
+	if err != nil {
+		return err
 	}
-	maxPartID := int((fsize+config.ResumePartSize-1)/config.ResumePartSize - 1)
+	maxPartID := int(partNum) - 1
 
 	if config.Headers == nil {
 		config.Headers = make(map[string]string)
 	}
 
-	curSize, partSize := int64(0), config.ResumePartSize
+	curSize := int64(0)
 	headers := config.Headers
+	listener := config.Listener
+	event := newProgressEvent(TransferStartedEvent, 0, fsize)
+	publishProgress(listener, event)
+
 	for id := 0; id <= maxPartID; id++ {
 		if curSize+partSize > fsize {
 			partSize = fsize - curSize
@@ -242,26 +322,33 @@ func (up *UpYun) resumePut(config *PutObjectConfig) error {
 				break
 			}
 			if _, ok := err.(net.Error); !ok {
+				event = newProgressEvent(TransferFailedEvent, curSize, fsize)
+				publishProgress(listener, event)
 				return fmt.Errorf("doRESTRequest: %v", err)
 			}
 			fragFile.Seek(0, 0)
 		}
 
 		if config.MaxResumePutTries > 0 && try == config.MaxResumePutTries {
+			event = newProgressEvent(TransferFailedEvent, curSize, fsize)
+			publishProgress(listener, event)
 			return err
 		}
 
+		curSize += partSize
+		event = newProgressEvent(TransferDataEvent, curSize, fsize)
+		publishProgress(listener, event)
 		if id == 0 {
 			headers["X-Upyun-Multi-UUID"] = resp.Header.Get("X-Upyun-Multi-UUID")
 		} else {
 			if id == maxPartID {
-				return nil
+				break
 			}
 		}
-
-		curSize += partSize
 	}
 
+	event = newProgressEvent(TransferCompletedEvent, curSize, fsize)
+	publishProgress(listener, event)
 	return nil
 }
 
@@ -281,6 +368,269 @@ func (up *UpYun) Put(config *PutObjectConfig) (err error) {
 	return up.put(config)
 }
 
+func (up *UpYun) InitMultipartUpload(config *InitMultipartUploadConfig) (*InitMultipartUploadResult, error) {
+	partSize, _, err := getPartInfo(config.PartSize, config.ContentLength)
+	if err != nil {
+		return nil, err
+	}
+	headers := make(map[string]string)
+	headers["X-Upyun-Multi-Type"] = config.ContentType
+	if config.ContentLength > 0 {
+		headers["X-Upyun-Multi-Length"] = strconv.FormatInt(config.ContentLength, 10)
+	}
+	headers["X-Upyun-Multi-Stage"] = "initiate"
+	headers["X-Upyun-Multi-Disorder"] = "true"
+	headers["X-Upyun-Multi-Part-Size"] = strconv.FormatInt(partSize, 10)
+	resp, err := up.doRESTRequest(&restReqConfig{
+		method:    "PUT",
+		uri:       config.Path,
+		headers:   headers,
+		closeBody: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &InitMultipartUploadResult{
+		UploadID: resp.Header.Get("X-Upyun-Multi-Uuid"),
+		Path:     config.Path,
+		PartSize: partSize,
+	}, err
+}
+func (up *UpYun) UploadPart(initResult *InitMultipartUploadResult, part *UploadPartConfig) error {
+	headers := make(map[string]string)
+	headers["X-Upyun-Multi-Stage"] = "upload"
+	headers["X-Upyun-Multi-Uuid"] = initResult.UploadID
+	headers["X-Upyun-Part-Id"] = fmt.Sprint(part.PartID)
+	headers["Content-Length"] = fmt.Sprint(part.PartSize)
+
+	_, err := up.doRESTRequest(&restReqConfig{
+		method:    "PUT",
+		uri:       initResult.Path,
+		headers:   headers,
+		closeBody: true,
+		useMD5:    false,
+		httpBody:  part.Reader,
+	})
+	if err != nil {
+		return fmt.Errorf("doRESTRequest: %v", err)
+	}
+	return nil
+}
+func (up *UpYun) ListMultipartUploads(config *ListMultipartConfig) (*ListMultipartUploadResult, error) {
+	headers := make(map[string]string)
+	headers["X-Upyun-List-Type"] = "multi"
+	if config.Prefix != "" {
+		headers["X-Upyun-List-Prefix"] = base64.StdEncoding.EncodeToString([]byte(config.Prefix))
+	}
+	if config.Limit > 0 {
+		headers["X-Upyun-List-Limit"] = strconv.FormatInt(config.Limit, 10)
+	}
+
+	res, err := up.doRESTRequest(&restReqConfig{
+		method:    "GET",
+		headers:   headers,
+		uri:       "/",
+		closeBody: false,
+		useMD5:    false,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("ListMultipartUploads: %v", err)
+	}
+
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return nil, fmt.Errorf("ListMultipartUploads reader body: %v", err)
+	}
+
+	result := &ListMultipartUploadResult{}
+	err = json.Unmarshal(body, result)
+	if err != nil {
+		return nil, fmt.Errorf("ListMultipartUploads json unmarshal: %v", err)
+	}
+	return result, nil
+}
+
+func (up *UpYun) ListMultipartParts(intiResult *InitMultipartUploadResult, config *ListMultipartPartsConfig) (*ListUploadedPartsResult, error) {
+	headers := make(map[string]string)
+	headers["X-Upyun-Multi-Uuid"] = intiResult.UploadID
+
+	if config.BeginID > 0 {
+		headers["X-Upyun-Part-Id"] = fmt.Sprint(config.BeginID)
+	}
+	res, err := up.doRESTRequest(&restReqConfig{
+		method:    "GET",
+		headers:   headers,
+		uri:       intiResult.Path,
+		closeBody: false,
+		useMD5:    false,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("ListUploadedParts: %v", err)
+	}
+
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return nil, fmt.Errorf("ListUploadedParts reader body: %v", err)
+	}
+
+	result := &ListUploadedPartsResult{}
+	err = json.Unmarshal(body, result)
+	if err != nil {
+		return nil, fmt.Errorf("ListUploadedParts json unmarshal: %v", err)
+	}
+	return result, nil
+}
+func (up *UpYun) UploadPartFromFile(initResult *InitMultipartUploadResult, filePath string, startPosition, partSize int64, partID int) error {
+	fd, err := os.Open(filePath)
+	if err != nil {
+		return err
+	}
+	defer fd.Close()
+	fd.Seek(startPosition, os.SEEK_SET)
+	headers := make(map[string]string)
+	headers["X-Upyun-Multi-Stage"] = "upload"
+	headers["X-Upyun-Multi-Uuid"] = initResult.UploadID
+	headers["X-Upyun-Part-Id"] = fmt.Sprint(partID)
+	headers["Content-Length"] = fmt.Sprint(partSize)
+
+	_, err = up.doRESTRequest(&restReqConfig{
+		method:    "PUT",
+		uri:       initResult.Path,
+		headers:   headers,
+		closeBody: true,
+		useMD5:    false,
+		httpBody:  &io.LimitedReader{R: fd, N: partSize},
+	})
+	if err != nil {
+		return fmt.Errorf("doRESTRequest: %v", err)
+	}
+	return nil
+}
+func (up *UpYun) CompleteMultipartUpload(initResult *InitMultipartUploadResult) error {
+	headers := make(map[string]string)
+	headers["X-Upyun-Multi-Stage"] = "complete"
+	headers["X-Upyun-Multi-Uuid"] = initResult.UploadID
+	_, err := up.doRESTRequest(&restReqConfig{
+		method:  "PUT",
+		uri:     initResult.Path,
+		headers: headers,
+	})
+	if err != nil {
+		return fmt.Errorf("doRESTRequest: %v", err)
+	}
+	return nil
+}
+func (up *UpYun) UploadFile(config *UploadFileConfig) error {
+	if config.LocalPath == "" {
+		return fmt.Errorf("resumePut: should using local path")
+	}
+
+	var err error
+	config.LocalPath, err = filepath.Abs(config.LocalPath)
+	if err != nil {
+		return err
+	}
+
+	filePath := config.LocalPath
+	cp, err := newCheckpoint(filePath, config.Path, config.CheckPointDir)
+	if err != nil {
+		return err
+	}
+	var initResult *InitMultipartUploadResult
+	if cp.UploadID == "" { //should init upload
+		initResult, err = up.InitMultipartUpload(&InitMultipartUploadConfig{
+			Path:          config.Path,
+			ContentLength: cp.FileStat.Size,
+			PartSize:      config.PartSize,
+		})
+		if err != nil {
+			return err
+		}
+
+		err := cp.init(initResult.PartSize)
+		if err != nil {
+			return err
+		}
+		cp.UploadID = initResult.UploadID
+	} else {
+		initResult = &InitMultipartUploadResult{
+			Path:     config.Path,
+			UploadID: cp.UploadID,
+		}
+	}
+
+	workers := config.Parallel
+	if workers == 0 {
+		workers = 4
+	}
+	jobChan := make(chan *uploadPart, workers*2)
+	results := make(chan *uploadPart, workers*2)
+	failed := make(chan error, 1)
+	dieCh := make(chan struct{})
+
+	for i := 0; i < workers; i++ {
+		go func() {
+			for part := range jobChan {
+				err := up.UploadPartFromFile(initResult, filePath, part.Offset, part.PartSize, part.PartID)
+				if err != nil {
+					select {
+					case <-dieCh:
+					case failed <- err:
+					}
+					return
+				}
+				select {
+				case <-dieCh:
+					return
+				case results <- part:
+				}
+			}
+		}()
+	}
+
+	todoParts := cp.todoParts()
+	completedBytes := cp.getCompletedBytes()
+	listener := config.Listener
+	event := newProgressEvent(TransferStartedEvent, completedBytes, cp.FileStat.Size)
+	publishProgress(listener, event)
+	go func() {
+		defer close(jobChan)
+		for _, part := range todoParts {
+			select {
+			case jobChan <- part:
+			case <-dieCh:
+				return
+			}
+		}
+	}()
+
+	for range todoParts {
+		select {
+		case r := <-results:
+			r.Completed = true
+			cp.completePart(r.PartID)
+			cp.dump()
+			completedBytes += r.PartSize
+			event = newProgressEvent(TransferDataEvent, completedBytes, cp.FileStat.Size)
+			publishProgress(listener, event)
+		case err := <-failed:
+			close(dieCh)
+			event = newProgressEvent(TransferFailedEvent, completedBytes, cp.FileStat.Size)
+			publishProgress(listener, event)
+			return err
+		}
+	}
+
+	event = newProgressEvent(TransferCompletedEvent, completedBytes, cp.FileStat.Size)
+	publishProgress(listener, event)
+
+	err = up.CompleteMultipartUpload(initResult)
+	if err != nil {
+		return err
+	}
+	cp.remove()
+	return nil
+}
 func (up *UpYun) Delete(config *DeleteObjectConfig) error {
 	headers := map[string]string{}
 	if config.Async == true {
@@ -496,7 +846,7 @@ func (up *UpYun) doRESTRequest(config *restReqConfig) (*http.Response, error) {
 	endpoint := up.doGetEndpoint("v0.api.upyun.com")
 	url := fmt.Sprintf("http://%s%s", endpoint, escUri)
 
-	resp, err := up.doHTTPRequest(config.method, url, headers, config.httpBody)
+	resp, err := up.doHTTPRequest(config.method, url, headers, config.httpBody, config.listener)
 	if err != nil {
 		// Don't modify net error
 		return nil, err

@@ -33,7 +33,7 @@ var (
 		0xffffffff, /* 1111 1111 1111 1111  1111 1111 1111 1111 */
 		0xffffffff, /* 1111 1111 1111 1111  1111 1111 1111 1111 */
 	}
-	hex = "0123456789ABCDEF"
+	hexMap = "0123456789ABCDEF"
 )
 
 func makeRFC1123Date(d time.Time) string {
@@ -100,8 +100,8 @@ func escapeUri(s string) string {
 		c := s[i]
 		if escape[c>>5]&(1<<(c&0x1f)) > 0 {
 			ret[j] = '%'
-			ret[j+1] = hex[c>>4]
-			ret[j+2] = hex[c&0xf]
+			ret[j+1] = hexMap[c>>4]
+			ret[j+2] = hexMap[c&0xf]
 			j = j + 3
 		} else {
 			ret[j] = c

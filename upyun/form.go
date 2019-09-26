@@ -140,5 +140,5 @@ func (up *UpYun) doFormRequest(url string, formValues map[string]string) (*http.
 	}
 
 	body := io.MultiReader(formBody, fd, bdBuf)
-	return up.doHTTPRequest("POST", url, headers, body)
+	return up.doHTTPRequest("POST", url, headers, body, nil)
 }

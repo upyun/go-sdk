@@ -7,9 +7,11 @@ import (
 	"net"
 	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
+	"time"
 )
 
 var (
@@ -52,16 +54,23 @@ func TestPutWithFileReader(t *testing.T) {
 	fd, _ := os.Open(LOCAL_FILE)
 	NotNil(t, fd)
 	defer fd.Close()
+	fileInfo, _ := fd.Stat()
+	NotNil(t, fileInfo)
 
+	l := &testProgressListener{
+		expectTotal: fileInfo.Size(),
+	}
 	err := up.Put(&PutObjectConfig{
 		Path:   REST_FILE_1,
 		Reader: fd,
 		Headers: map[string]string{
 			"X-Upyun-Meta-Filename": LOCAL_FILE,
 		},
-		UseMD5: true,
+		UseMD5:   true,
+		Listener: l,
 	})
 	Nil(t, err)
+	Equal(t, l.checkCompleted(), true)
 }
 
 func TestPutWithBuffer(t *testing.T) {
@@ -101,7 +110,229 @@ func TestPutWithBufferAppend(t *testing.T) {
 	}
 }
 */
+type testProgressListener struct {
+	lastEvent   *ProgressEvent
+	expectTotal int64
+}
 
+func (l *testProgressListener) ProgressChanged(event *ProgressEvent) {
+	l.lastEvent = event
+}
+func (l *testProgressListener) checkCompleted() bool {
+	if l.lastEvent != nil {
+		if l.lastEvent.EventType == TransferCompletedEvent {
+			if l.lastEvent.TotalBytes != l.lastEvent.ConsumedBytes {
+				panic(fmt.Sprintf("total %d != consume %d", l.lastEvent.TotalBytes,
+					l.lastEvent.ConsumedBytes))
+			}
+			if l.lastEvent.TotalBytes != l.expectTotal {
+				panic(fmt.Sprintf("total %d != expect %d", l.lastEvent.TotalBytes,
+					l.expectTotal))
+			}
+			return true
+		}
+	}
+	return false
+}
+func testMultiUpload(t *testing.T, key string, data []byte, partSize int64, parts []int, completed bool) *InitMultipartUploadResult {
+	uploadResult, err := up.InitMultipartUpload(&InitMultipartUploadConfig{
+		Path: key,
+	})
+	Nil(t, err)
+	for _, partId := range parts {
+		start := int64(partId) * partSize
+		end := start + partSize
+		if end > int64(len(data)) {
+			end = int64(len(data))
+		}
+		err := up.UploadPart(uploadResult, &UploadPartConfig{
+			PartID:   partId,
+			PartSize: end - start,
+			Reader:   bytes.NewReader(data[start:end]),
+		})
+		Nil(t, err)
+	}
+	if completed {
+		err := up.CompleteMultipartUpload(uploadResult)
+		Nil(t, err)
+	}
+	return uploadResult
+}
+func TestMultiListParts(t *testing.T) {
+	data10m := make([]byte, 10*1024*1024)
+	partSize := int64(3 * 1024 * 1024)
+	prefixKey := TempKey(t)
+
+	key := path.Join(prefixKey, "upload.txt")
+	initResult := testMultiUpload(t, key, data10m, partSize, []int{1, 2}, false)
+	result, err := up.ListMultipartParts(initResult, &ListMultipartPartsConfig{})
+	Nil(t, err)
+	Equal(t, len(result.Parts), 2)
+
+	result, err = up.ListMultipartParts(initResult, &ListMultipartPartsConfig{BeginID: 2})
+	Nil(t, err)
+	Equal(t, len(result.Parts), 1)
+}
+func TestMultiGetUpload(t *testing.T) {
+	data10m := make([]byte, 10*1024*1024)
+	partSize := int64(3 * 1024 * 1024)
+	prefixKey := TempKey(t)
+	var key string
+	keyMap := make(map[string]bool)
+
+	key = path.Join(prefixKey, "init.txt")
+	keyMap[key] = true
+	testMultiUpload(t, key, data10m, partSize, nil, false)
+	key = path.Join(prefixKey, "upload.txt")
+	keyMap[key] = true
+	testMultiUpload(t, key, data10m, partSize, []int{1, 2}, false)
+	key = path.Join(prefixKey, "complete.txt")
+	keyMap[key] = true
+	testMultiUpload(t, key, data10m, partSize, []int{0, 1, 2, 3}, true)
+	result, err := up.ListMultipartUploads(&ListMultipartConfig{
+		Prefix: prefixKey,
+	})
+	Nil(t, err)
+
+	Equal(t, len(result.Files), len(keyMap))
+}
+func TestMultiUploadSuccess(t *testing.T) {
+	fname := TempLocalFile(t)
+	defer os.RemoveAll(fname)
+	fd, _ := os.Create(fname)
+	NotNil(t, fd)
+	kb := strings.Repeat("U", 1024)
+	for i := 0; i < (1024*2 + 2); i++ {
+		fd.WriteString(kb)
+	}
+	fd.Close()
+	key := TempKey(t)
+
+	uploadConfig := &UploadFileConfig{
+		Path:      key,
+		LocalPath: fname,
+	}
+	err := up.UploadFile(uploadConfig)
+	Nil(t, err)
+
+	//check md5
+	getFile := TempLocalFile(t)
+	defer os.RemoveAll(getFile)
+	info, err := up.Get(&GetObjectConfig{
+		Path:      key,
+		LocalPath: getFile,
+	})
+	Nil(t, err)
+	md5Value, err := computeMD5(getFile, true)
+	Nil(t, err)
+	Equal(t, info.MD5, md5Value+"-1")
+
+	//reupload with checkpoint dir
+	cpDir := TempLocalDir(t)
+	uploadConfig.CheckPointDir = cpDir
+	time.Sleep(time.Second)
+	err = up.UploadFile(uploadConfig)
+	Nil(t, err)
+	info1, err := up.Get(&GetObjectConfig{
+		Path:      key,
+		LocalPath: getFile,
+	})
+	Nil(t, err)
+	Equal(t, info.Time.Before(info1.Time), true)
+}
+func TestMultiUploadCheckpoint(t *testing.T) {
+	fname := TempLocalFile(t)
+	defer os.RemoveAll(fname)
+	fd, _ := os.Create(fname)
+	NotNil(t, fd)
+	kb := strings.Repeat("U", 1024)
+	for i := 0; i < (1024*2 + 2); i++ {
+		fd.WriteString(kb)
+	}
+	defer fd.Close()
+	fd.Sync()
+	key := TempKey(t)
+	diskFile, err := fd.Stat()
+	Nil(t, err)
+
+	cpDir := TempLocalDir(t)
+	fname, err = filepath.Abs(fname)
+	Nil(t, err)
+	config := &UploadFileConfig{
+		Path:          key,
+		LocalPath:     fname,
+		CheckPointDir: cpDir,
+	}
+
+	//cp init
+	{
+		cp, err := newCheckpoint(config.LocalPath, config.Path, cpDir)
+		Nil(t, err)
+		err = cp.dump()
+		Nil(t, err)
+		err = up.UploadFile(config)
+		Nil(t, err)
+		if _, err = os.Stat(cp.cpPath); !os.IsNotExist(err) {
+			t.Fatal("not using checkpoint file")
+		}
+	}
+	time.Sleep(time.Second)
+	// cp upload0, 3, 6, 9..
+	{
+
+		cp, err := newCheckpoint(config.LocalPath, config.Path, cpDir)
+		Nil(t, err)
+		err = cp.init(1024 * 1024)
+		Nil(t, err)
+		result, err := up.InitMultipartUpload(&InitMultipartUploadConfig{
+			Path:          key,
+			ContentLength: diskFile.Size(),
+		})
+		cp.UploadID = result.UploadID
+		Nil(t, err)
+
+		part := cp.Parts[1]
+		err = up.UploadPartFromFile(result, fname, part.Offset, part.PartSize, part.PartID)
+		Nil(t, err)
+		part.Completed = true
+
+		err = cp.dump()
+		Nil(t, err)
+		err = up.UploadFile(config)
+		Nil(t, err)
+		if _, err := os.Stat(cp.cpPath); !os.IsNotExist(err) {
+			t.Fatal("not using checkpoint file")
+		}
+	}
+	time.Sleep(time.Second)
+	//cp upload all part, but not completed
+	{
+		cp, err := newCheckpoint(config.LocalPath, config.Path, cpDir)
+		Nil(t, err)
+		err = cp.init(1024 * 1024)
+		Nil(t, err)
+
+		result, err := up.InitMultipartUpload(&InitMultipartUploadConfig{
+			Path:          key,
+			ContentLength: diskFile.Size(),
+		})
+		cp.UploadID = result.UploadID
+
+		Nil(t, err)
+		for _, part := range cp.Parts {
+			err := up.UploadPartFromFile(result, fname, part.Offset, part.PartSize, part.PartID)
+			Nil(t, err)
+			part.Completed = true
+		}
+		cp.dump()
+		
+		err = up.UploadFile(config)
+		Nil(t, err)
+		if _, err := os.Stat(cp.cpPath); !os.IsNotExist(err) {
+			t.Fatal("not using checkpoint file")
+		}
+	}
+}
 func TestResumePut(t *testing.T) {
 	fname := "1M"
 	fd, _ := os.Create(fname)
@@ -110,17 +341,24 @@ func TestResumePut(t *testing.T) {
 	for i := 0; i < (minResumePutFileSize/1024 + 2); i++ {
 		fd.WriteString(kb)
 	}
-	fd.Close()
+	defer fd.Close()
 
 	defer os.RemoveAll(fname)
 
-	err := up.Put(&PutObjectConfig{
+	fileInfo, err := fd.Stat()
+	Nil(t, err)
+	l := &testProgressListener{
+		expectTotal: fileInfo.Size(),
+	}
+	err = up.Put(&PutObjectConfig{
 		Path:            REST_FILE_1M,
 		LocalPath:       fname,
 		UseMD5:          true,
 		UseResumeUpload: true,
+		Listener:        l,
 	})
 	Nil(t, err)
+	Equal(t, l.checkCompleted(), true)
 }
 
 func TestGetWithWriter(t *testing.T) {
