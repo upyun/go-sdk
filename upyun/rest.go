@@ -343,6 +343,7 @@ func (up *UpYun) List(config *GetObjectsConfig) error {
 	}
 
 	config.Headers["X-UpYun-Folder"] = "true"
+	config.Headers["Accept"] = "application/json"
 
 	// 1st level
 	if config.level == 0 {
@@ -372,7 +373,11 @@ func (up *UpYun) List(config *GetObjectsConfig) error {
 			return fmt.Errorf("ioutil ReadAll: %v", err)
 		}
 
-		for _, fInfo := range parseBodyToFileInfos(b) {
+		iter, files, err :=  parseBodyToFileInfos(b)
+		if err != nil {
+			return fmt.Errorf("parse list body: %v", err)
+		}
+		for _, fInfo := range files {
 			if fInfo.IsDir && (config.level+1 < config.MaxListLevel || config.MaxListLevel == -1) {
 				rConfig := &GetObjectsConfig{
 					Path:           path.Join(config.Path, fInfo.Name),
@@ -414,10 +419,10 @@ func (up *UpYun) List(config *GetObjectsConfig) error {
 
 		}
 
-		config.Headers["X-List-Iter"] = resp.Header.Get("X-Upyun-List-Iter")
-		if config.Headers["X-List-Iter"] == "g2gCZAAEbmV4dGQAA2VvZg" {
+		if iter == "g2gCZAAEbmV4dGQAA2VvZg" {
 			return nil
 		}
+		config.Headers["X-List-Iter"] = iter
 	}
 }
 
