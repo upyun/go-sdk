@@ -278,9 +278,9 @@ func (up *UpYun) resumePut(config *PutObjectConfig) error {
 		return err
 	}
 
-	for id := 0; id < maxPartID; id++ {
-		if id == maxPartID-1 {
-			partSize = fsize - int64(id)*partSize
+	for id := 0; id <= maxPartID; id++ {
+		if curSize+partSize > fsize {
+			partSize = fsize - curSize
 		}
 		fragFile, err := newFragmentFile(f, curSize, partSize)
 		if err != nil {
@@ -303,6 +303,7 @@ func (up *UpYun) resumePut(config *PutObjectConfig) error {
 		if config.MaxResumePutTries > 0 && try == config.MaxResumePutTries {
 			return err
 		}
+		curSize += partSize
 	}
 
 	completeConfig := &CompleteMultipartUploadConfig{}
