@@ -1,10 +1,8 @@
 package upyun
 
 import (
-	"crypto/md5"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -30,7 +28,7 @@ var up = NewUpYun(&UpYunConfig{
 })
 
 func MakeTmpPath() string {
-	return "/go-sdk/" + fmt.Sprint(time.Now().UnixNano())
+	return "/go-sdk/" + time.Now().String()
 }
 func TempKey(t *testing.T) string {
 	return path.Join(ROOT, fmt.Sprint(time.Now().UnixNano()))
@@ -99,35 +97,6 @@ func isNil(object interface{}) bool {
 
 	return false
 
-}
-
-func computeMD5(filePath string, resume bool) (string, error) {
-	hash := md5.New()
-	f, err := os.Open(filePath)
-	if err != nil {
-		return "", err
-	}
-	if resume {
-		stat, err := f.Stat()
-		if err != nil {
-			return "", err
-		}
-		size := stat.Size()
-		count := (size + DefaultPartSize - 1) / DefaultPartSize
-		for i := int64(0); i < count; i++ {
-			innerHash := md5.New()
-			if _, err := io.Copy(innerHash, io.LimitReader(f, DefaultPartSize)); err != nil {
-				return "", err
-			}
-			hash.Write([]byte(fmt.Sprintf("%x", innerHash.Sum(nil))))
-		}
-	} else {
-		if _, err := io.Copy(hash, f); err != nil {
-			return "", err
-		}
-	}
-	hash.Sum(nil)
-	return fmt.Sprintf("%x", hash.Sum(nil)), nil
 }
 
 func TestMain(m *testing.M) {

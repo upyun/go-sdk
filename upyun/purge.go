@@ -28,7 +28,7 @@ func (up *UpYun) Purge(urls []string) (fails []string, err error) {
 	form.Add("purge", purgeList)
 
 	body := strings.NewReader(form.Encode())
-	resp, err := up.doHTTPRequest("POST", purge, headers, body, nil)
+	resp, err := up.doHTTPRequest("POST", purge, headers, body)
 	if err != nil {
 		return fails, err
 	}

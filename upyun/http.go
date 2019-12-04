@@ -11,7 +11,7 @@ import (
 )
 
 func (up *UpYun) doHTTPRequest(method, url string, headers map[string]string,
-	body io.Reader, listener ProgressListener) (resp *http.Response, err error) {
+	body io.Reader) (resp *http.Response, err error) {
 	req, err := http.NewRequest(method, url, body)
 	if err != nil {
 		return nil, err
@@ -50,27 +50,9 @@ func (up *UpYun) doHTTPRequest(method, url string, headers map[string]string,
 		}
 	}
 
-	var reader *teeReader
-	if listener != nil {
-		reader = TeeReader(body, req.ContentLength, listener)
-		req.Body = reader
-		event := newProgressEvent(TransferStartedEvent, 0, req.ContentLength)
-		publishProgress(listener, event)
-	}
-	res, err := up.httpc.Do(req)
-	if err != nil {
-		if listener != nil {
-			event := newProgressEvent(TransferFailedEvent, reader.consumedBytes, req.ContentLength)
-			publishProgress(listener, event)
-		}
-		return nil, err
-	}
+	//	fmt.Printf("%+v\n", req)
 
-	if listener != nil {
-		event := newProgressEvent(TransferCompletedEvent, reader.consumedBytes, req.ContentLength)
-		publishProgress(listener, event)
-	}
-	return res, nil
+	return up.httpc.Do(req)
 }
 
 func (up *UpYun) doGetEndpoint(host string) string {
