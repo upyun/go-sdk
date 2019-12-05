@@ -101,7 +101,68 @@ func TestPutWithBufferAppend(t *testing.T) {
 	}
 }
 */
+func testMultiUpload(t *testing.T, key string, data []byte, partSize int64, parts []int, completed bool) *InitMultipartUploadResult {
+	uploadResult, err := up.InitMultipartUpload(&InitMultipartUploadConfig{
+		Path: key,
+	})
+	Nil(t, err)
+	for _, partId := range parts {
+		start := int64(partId) * partSize
+		end := start + partSize
+		if end > int64(len(data)) {
+			end = int64(len(data))
+		}
+		err := up.UploadPart(uploadResult, &UploadPartConfig{
+			PartID:   partId,
+			PartSize: end - start,
+			Reader:   bytes.NewReader(data[start:end]),
+		})
+		Nil(t, err)
+	}
+	if completed {
+		err := up.CompleteMultipartUpload(uploadResult, nil)
+		Nil(t, err)
+	}
+	return uploadResult
+}
+func TestMultiListParts(t *testing.T) {
+	data10m := make([]byte, 10*1024*1024)
+	partSize := int64(3 * 1024 * 1024)
+	prefixKey := TempKey(t)
 
+	key := path.Join(prefixKey, "upload.txt")
+	initResult := testMultiUpload(t, key, data10m, partSize, []int{1, 2}, false)
+	result, err := up.ListMultipartParts(initResult, &ListMultipartPartsConfig{})
+	Nil(t, err)
+	Equal(t, len(result.Parts), 2)
+
+	result, err = up.ListMultipartParts(initResult, &ListMultipartPartsConfig{BeginID: 2})
+	Nil(t, err)
+	Equal(t, len(result.Parts), 1)
+}
+func TestMultiGetUpload(t *testing.T) {
+	data10m := make([]byte, 10*1024*1024)
+	partSize := int64(3 * 1024 * 1024)
+	prefixKey := TempKey(t)
+	var key string
+	keyMap := make(map[string]bool)
+
+	key = path.Join(prefixKey, "init.txt")
+	keyMap[key] = true
+	testMultiUpload(t, key, data10m, partSize, nil, false)
+	key = path.Join(prefixKey, "upload.txt")
+	keyMap[key] = true
+	testMultiUpload(t, key, data10m, partSize, []int{1, 2}, false)
+	key = path.Join(prefixKey, "complete.txt")
+	keyMap[key] = true
+	testMultiUpload(t, key, data10m, partSize, []int{0, 1, 2, 3}, true)
+	result, err := up.ListMultipartUploads(&ListMultipartConfig{
+		Prefix: prefixKey,
+	})
+	Nil(t, err)
+
+	Equal(t, len(result.Files), len(keyMap))
+}
 func TestResumePut(t *testing.T) {
 	fname := "1M"
 	fd, _ := os.Create(fname)
