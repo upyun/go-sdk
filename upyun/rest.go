@@ -73,6 +73,18 @@ type PutObjectConfig struct {
 	MaxResumePutTries int
 }
 
+type MoveObjectConfig struct {
+	SrcPath  string
+	DestPath string
+	Headers  map[string]string
+}
+
+type CopyObjectConfig struct {
+	SrcPath  string
+	DestPath string
+	Headers  map[string]string
+}
+
 //UploadFileConfig is multipart file upload config
 type UploadPartConfig struct {
 	Reader   io.Reader
@@ -330,6 +342,42 @@ func (up *UpYun) Put(config *PutObjectConfig) (err error) {
 	return up.put(config)
 }
 
+func (up *UpYun) Move(config *MoveObjectConfig) error {
+	headers := map[string]string{
+		"X-Upyun-Move-Source": path.Join("/", up.Bucket, config.SrcPath),
+	}
+	for k, v := range config.Headers {
+		headers[k] = v
+	}
+	_, err := up.doRESTRequest(&restReqConfig{
+		method:  "PUT",
+		uri:     config.DestPath,
+		headers: headers,
+	})
+	if err != nil {
+		return fmt.Errorf("doRESTRequest: %v", err)
+	}
+	return nil
+}
+
+func (up *UpYun) Copy(config *CopyObjectConfig) error {
+	headers := map[string]string{
+		"X-Upyun-Copy-Source": path.Join("/", up.Bucket, config.SrcPath),
+	}
+	for k, v := range config.Headers {
+		headers[k] = v
+	}
+	_, err := up.doRESTRequest(&restReqConfig{
+		method:  "PUT",
+		uri:     config.DestPath,
+		headers: headers,
+	})
+	if err != nil {
+		return fmt.Errorf("doRESTRequest: %v", err)
+	}
+	return nil
+}
+
 func (up *UpYun) InitMultipartUpload(config *InitMultipartUploadConfig) (*InitMultipartUploadResult, error) {
 	partSize, _, err := getPartInfo(config.PartSize, config.ContentLength)
 	if err != nil {
@@ -555,7 +603,7 @@ func (up *UpYun) List(config *GetObjectsConfig) error {
 			return fmt.Errorf("ioutil ReadAll: %v", err)
 		}
 
-		iter, files, err :=  parseBodyToFileInfos(b)
+		iter, files, err := parseBodyToFileInfos(b)
 		if err != nil {
 			return fmt.Errorf("parse list body: %v", err)
 		}

@@ -2,6 +2,7 @@ package upyun
 
 import (
 	"bytes"
+	"time"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -75,6 +76,47 @@ func TestPutWithBuffer(t *testing.T) {
 			"Content-Length": fmt.Sprint(len(s)),
 		},
 		UseMD5: true,
+	})
+	Nil(t, err)
+}
+
+func TestCopyMove(t *testing.T) {
+	s := BUF_CONTENT
+	r := strings.NewReader(s)
+
+	srcPath := path.Join(REST_DIR, "src_file")
+	err := up.Put(&PutObjectConfig{
+		Path:   srcPath,
+		Reader: r,
+		Headers: map[string]string{
+			"Content-Length": fmt.Sprint(len(s)),
+		},
+		UseMD5: true,
+	})
+	Nil(t, err)
+
+	time.Sleep(time.Second)
+	copyPath := path.Join(REST_DIR, "copy_dest_file")
+	err = up.Copy(&CopyObjectConfig{
+		SrcPath: srcPath,
+		DestPath: copyPath,
+	})
+	Nil(t, err)
+
+	movePath := path.Join(REST_DIR, "move_dest_file")
+	err = up.Move(&MoveObjectConfig{
+		SrcPath: srcPath,
+		DestPath: movePath,
+	})
+	Nil(t, err)
+
+	time.Sleep(time.Second)
+	err = up.Delete(&DeleteObjectConfig{
+		Path: copyPath,
+	})
+	Nil(t, err)
+	err = up.Delete(&DeleteObjectConfig{
+		Path: movePath,
 	})
 	Nil(t, err)
 }
