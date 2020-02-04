@@ -27,6 +27,8 @@ Table of Contents
             * [上传](#上传)
             * [下载](#下载)
             * [删除](#删除)
+            * [移动](#移动)
+            * [复制](#复制)
             * [获取文件信息](#获取文件信息)
             * [获取文件列表](#获取文件列表)
          * [又拍云缓存刷新接口](#又拍云缓存刷新接口)
@@ -44,6 +46,8 @@ Table of Contents
             * [GetObjectConfig](#getobjectconfig)
             * [GetObjectsConfig](#getobjectsconfig)
             * [DeleteObjectConfig](#deleteobjectconfig)
+            * [MoveObjectConfig](#moveobjectconfig)
+            * [CopyObjectConfig](#copyobjectconfig)
             * [FormUploadConfig](#formuploadconfig)
             * [CommitTasksConfig](#committasksconfig)
             * [LiveauditCreateTask](#liveauditcreatetask)
@@ -141,6 +145,18 @@ func (up *UpYun) Get(config *GetObjectConfig) (fInfo *FileInfo, err error)
 
 ```go
 func (up *UpYun) Delete(config *DeleteObjectConfig) error
+```
+
+#### 移动
+
+```go
+func (up *UpYun) Move(config *MoveObjectConfig) error
+```
+
+#### 复制
+
+```go
+func (up *UpYun) Copy(config *CopyObjectConfig) error
 ```
 
 #### 获取文件信息
@@ -322,6 +338,32 @@ type DeleteObjectConfig struct {
 ```
 
 `DeleteObjectConfig` 提供删除单个文件／空目录所需的参数。
+
+
+#### MoveObjectConfig
+
+```go
+type MoveObjectConfig struct {
+        SrcPath  string             // 移动源路径
+        DestPath string             // 目的路径
+        Headers  map[string]string  // 额外的 HTTP 请求头
+}
+```
+
+`MoveObjectConfig` 提供单个文件移动。
+
+
+#### CopyObjectConfig
+
+```go
+type CopyObjectConfig struct {
+        SrcPath  string             // 复制源路径
+        DestPath string             // 目的路径
+        Headers  map[string]string  // 额外的 HTTP 请求头
+}
+```
+
+`CopyObjectConfig` 提供单个文件复制。
 
 
 #### FormUploadConfig
