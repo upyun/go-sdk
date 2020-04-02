@@ -1,5 +1,13 @@
 # UPYUN Go SDK ChangeLog
 
+## Version 2.2.0 (2020.4.1)
+
+### features
+
+1. move file
+2. copy file
+3. output the folder to Json format
+
 ## Version 2.1.0 (2017.2.14)
 
 ### features
