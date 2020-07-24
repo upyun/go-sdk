@@ -1,3 +1,3 @@
-module github.com/upyun/go-sdk
+module github.com/upyun/go-sdk/v3
 
-go 1.12
+go 1.13
