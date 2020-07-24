@@ -8,7 +8,7 @@ package main
 import (
 	"os"
 
-	"github.com/upyun/go-sdk/upyun"
+	"github.com/upyun/go-sdk/v3/upyun"
 )
 
 var (
