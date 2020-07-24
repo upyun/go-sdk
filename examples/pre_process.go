@@ -8,7 +8,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/upyun/go-sdk/upyun"
+	"github.com/upyun/go-sdk/v3/upyun"
 )
 
 func asyncPreProcess(localPath string, saveKey string, apps []map[string]interface{}) {
