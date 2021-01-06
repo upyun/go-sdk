@@ -85,7 +85,7 @@ type CopyObjectConfig struct {
 	Headers  map[string]string
 }
 
-//UploadFileConfig is multipart file upload config
+// UploadFileConfig is multipart file upload config
 type UploadPartConfig struct {
 	Reader   io.Reader
 	PartSize int64
@@ -97,7 +97,7 @@ type CompleteMultipartUploadConfig struct {
 type InitMultipartUploadConfig struct {
 	Path          string
 	PartSize      int64
-	ContentLength int64 //optional
+	ContentLength int64 // optional
 	ContentType   string
 	OrderUpload   bool
 }
@@ -110,7 +110,7 @@ type InitMultipartUploadResult struct {
 type DeleteObjectConfig struct {
 	Path   string
 	Async  bool
-	Folder bool //optional
+	Folder bool // optional
 }
 
 type ModifyMetadataConfig struct {
@@ -208,7 +208,6 @@ func (up *UpYun) Get(config *GetObjectConfig) (fInfo *FileInfo, err error) {
 	if fInfo.Size, err = io.Copy(config.Writer, resp.Body); err != nil {
 		return nil, fmt.Errorf("io copy: %v", err)
 	}
-
 	return
 }
 
@@ -413,7 +412,7 @@ func (up *UpYun) UploadPart(initResult *InitMultipartUploadResult, part *UploadP
 	headers["X-Upyun-Multi-Stage"] = "upload"
 	headers["X-Upyun-Multi-Uuid"] = initResult.UploadID
 	headers["X-Upyun-Part-Id"] = strconv.FormatInt(int64(part.PartID), 10)
-	headers["Content-Length"] = strconv.FormatInt(int64(part.PartSize), 10)
+	headers["Content-Length"] = strconv.FormatInt(part.PartSize, 10)
 
 	_, err := up.doRESTRequest(&restReqConfig{
 		method:    "PUT",
@@ -513,7 +512,7 @@ func (up *UpYun) ListMultipartParts(intiResult *InitMultipartUploadResult, confi
 }
 func (up *UpYun) Delete(config *DeleteObjectConfig) error {
 	headers := map[string]string{}
-	if config.Async == true {
+	if config.Async {
 		headers["x-upyun-async"] = "true"
 	}
 	if config.Folder {
@@ -646,7 +645,6 @@ func (up *UpYun) List(config *GetObjectsConfig) error {
 			if config.MaxListObjects > 0 && config.objNum >= config.MaxListObjects {
 				return nil
 			}
-
 		}
 
 		if iter == "g2gCZAAEbmV4dGQAA2VvZg" {

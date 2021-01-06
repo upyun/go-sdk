@@ -39,7 +39,7 @@ var (
 
 func makeRFC1123Date(d time.Time) string {
 	utc := d.UTC().Format(time.RFC1123)
-	return strings.Replace(utc, "UTC", "GMT", -1)
+	return strings.ReplaceAll(utc, "UTC", "GMT")
 }
 
 func makeUserAgent(version string) string {
@@ -103,10 +103,10 @@ func escapeUri(s string) string {
 			ret[j] = '%'
 			ret[j+1] = hexMap[c>>4]
 			ret[j+2] = hexMap[c&0xf]
-			j = j + 3
+			j += 3
 		} else {
 			ret[j] = c
-			j = j + 1
+			j += 1
 		}
 	}
 	return string(ret)
@@ -217,12 +217,12 @@ func parseBodyToFileInfos(b []byte) (iter string, fInfos []*FileInfo, err error)
 	if err != nil {
 		return
 	}
-	
+
 	iter = files.Iter
 	fInfos = make([]*FileInfo, len(files.Files))
 
 	for i, f := range files.Files {
-		fInfos[i]=  &FileInfo{
+		fInfos[i] = &FileInfo{
 			Name:  f.Name,
 			IsDir: f.ContentType == "folder",
 			Size:  f.Length,
