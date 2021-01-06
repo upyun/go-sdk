@@ -39,7 +39,7 @@ var (
 
 func makeRFC1123Date(d time.Time) string {
 	utc := d.UTC().Format(time.RFC1123)
-	return strings.Replace(utc, "UTC", "GMT", -1)
+	return strings.ReplaceAll(utc, "UTC", "GMT")
 }
 
 func makeUserAgent(version string) string {

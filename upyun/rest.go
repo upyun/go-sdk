@@ -85,7 +85,7 @@ type CopyObjectConfig struct {
 	Headers  map[string]string
 }
 
-//UploadFileConfig is multipart file upload config
+// UploadFileConfig is multipart file upload config
 type UploadPartConfig struct {
 	Reader   io.Reader
 	PartSize int64
@@ -97,7 +97,7 @@ type CompleteMultipartUploadConfig struct {
 type InitMultipartUploadConfig struct {
 	Path          string
 	PartSize      int64
-	ContentLength int64 //optional
+	ContentLength int64 // optional
 	ContentType   string
 	OrderUpload   bool
 }
@@ -110,7 +110,7 @@ type InitMultipartUploadResult struct {
 type DeleteObjectConfig struct {
 	Path   string
 	Async  bool
-	Folder bool //optional
+	Folder bool // optional
 }
 
 type ModifyMetadataConfig struct {
