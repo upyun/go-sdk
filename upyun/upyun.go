@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	version = "2.2.0"
+	version = "3.0.1"
 
 	defaultChunkSize      = 32 * 1024
 	defaultConnectTimeout = time.Second * 60
