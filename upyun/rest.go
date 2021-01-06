@@ -343,7 +343,7 @@ func (up *UpYun) Put(config *PutObjectConfig) (err error) {
 
 func (up *UpYun) Move(config *MoveObjectConfig) error {
 	headers := map[string]string{
-		"X-Upyun-Move-Source": path.Join("/", up.Bucket, config.SrcPath),
+		"X-Upyun-Move-Source": path.Join("/", up.Bucket, escapeUri(config.SrcPath)),
 	}
 	for k, v := range config.Headers {
 		headers[k] = v
@@ -361,7 +361,7 @@ func (up *UpYun) Move(config *MoveObjectConfig) error {
 
 func (up *UpYun) Copy(config *CopyObjectConfig) error {
 	headers := map[string]string{
-		"X-Upyun-Copy-Source": path.Join("/", up.Bucket, config.SrcPath),
+		"X-Upyun-Copy-Source": path.Join("/", up.Bucket, escapeUri(config.SrcPath)),
 	}
 	for k, v := range config.Headers {
 		headers[k] = v
