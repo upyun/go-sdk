@@ -145,7 +145,8 @@ func TestPutWithBufferAppend(t *testing.T) {
 */
 func testMultiUpload(t *testing.T, key string, data []byte, partSize int64, parts []int, completed bool) *InitMultipartUploadResult {
 	uploadResult, err := up.InitMultipartUpload(&InitMultipartUploadConfig{
-		Path: key,
+		Path:     key,
+		PartSize: partSize,
 	})
 	Nil(t, err)
 	for _, partId := range parts {
