@@ -53,7 +53,7 @@ func (u *UpYun) MakeFormAuth(policy string) string {
 
 func (u *UpYun) MakeProcessAuth(kwargs map[string]string) string {
 	keys := []string{}
-	for k, _ := range kwargs {
+	for k := range kwargs {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)

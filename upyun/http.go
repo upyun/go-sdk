@@ -45,7 +45,7 @@ func (up *UpYun) doHTTPRequest(method, url string, headers map[string]string,
 			case *strings.Reader:
 				req.ContentLength = int64(v.Len())
 			case *io.LimitedReader:
-				req.ContentLength = int64(v.N)
+				req.ContentLength = v.N
 			}
 		}
 	}

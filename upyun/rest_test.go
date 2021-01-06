@@ -2,7 +2,6 @@ package upyun
 
 import (
 	"bytes"
-	"time"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -11,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 )
 
 var (
@@ -98,14 +98,14 @@ func TestCopyMove(t *testing.T) {
 	time.Sleep(time.Second)
 	copyPath := path.Join(REST_DIR, "copy_dest_file")
 	err = up.Copy(&CopyObjectConfig{
-		SrcPath: srcPath,
+		SrcPath:  srcPath,
 		DestPath: copyPath,
 	})
 	Nil(t, err)
 
 	movePath := path.Join(REST_DIR, "move_dest_file")
 	err = up.Move(&MoveObjectConfig{
-		SrcPath: srcPath,
+		SrcPath:  srcPath,
 		DestPath: movePath,
 	})
 	Nil(t, err)
@@ -251,7 +251,7 @@ func TestGetWithLocalPath(t *testing.T) {
 	Equal(t, fInfo.IsDir, false)
 
 	NotNil(t, fInfo.Meta)
-	name, _ := fInfo.Meta["x-upyun-meta-filename"]
+	name := fInfo.Meta["x-upyun-meta-filename"]
 	Equal(t, name, LOCAL_FILE)
 
 	_, err = os.Stat(LOCAL_SAVE_FILE)

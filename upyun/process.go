@@ -148,9 +148,8 @@ func (up *UpYun) CommitSyncTasks(commitTask interface{}) (result map[string]inte
 	var uri string
 	var payload string
 
-	switch commitTask.(type) {
+	switch taskConfig := commitTask.(type) {
 	case LiveauditCreateTask:
-		taskConfig := commitTask.(LiveauditCreateTask)
 		kwargs = map[string]interface{}{
 			"source":     taskConfig.Source,
 			"save_as":    taskConfig.SaveAs,
@@ -166,7 +165,6 @@ func (up *UpYun) CommitSyncTasks(commitTask interface{}) (result map[string]inte
 		uri = path.Join("/", up.Bucket, "/liveaudit/create")
 
 	case LiveauditCancelTask:
-		taskConfig := commitTask.(LiveauditCancelTask)
 		kwargs = map[string]interface{}{
 			"task_id": taskConfig.TaskId,
 			"service": up.Bucket,
@@ -174,7 +172,6 @@ func (up *UpYun) CommitSyncTasks(commitTask interface{}) (result map[string]inte
 		uri = path.Join("/", up.Bucket, "/liveaudit/cancel")
 
 	case SyncCommonTask:
-		taskConfig := commitTask.(SyncCommonTask)
 		kwargs = taskConfig.Kwargs
 		uri = path.Join("/", up.Bucket, taskConfig.TaskUri)
 
