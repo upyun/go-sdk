@@ -44,29 +44,25 @@ func checkResponse(res *http.Response) error {
 	return uerr
 }
 
-func IsNotExist(err error) bool {
+func checkStatusCode(err error, status int) bool {
 	if err == nil {
 		return false
 	}
 
 	ae, ok := err.(*Error)
-	return ok && ae.StatusCode == http.StatusNotFound
+	return ok && ae.StatusCode == status
+}
+
+func IsNotExist(err error) bool {
+	return checkStatusCode(err, http.StatusNotFound)
 }
 
 func IsNotModified(err error) bool {
-	if err == nil {
-		return false
-	}
-	ae, ok := err.(*Error)
-	return ok && ae.Code == http.StatusNotModified
+	return checkStatusCode(err, http.StatusNotModified)
 }
 
 func IsTooManyRequests(err error) bool {
-	if err == nil {
-		return false
-	}
-	ae, ok := err.(*Error)
-	return ok && ae.Code == http.StatusTooManyRequests
+	return checkStatusCode(err, http.StatusTooManyRequests)
 }
 
 func errorOperation(op string, err error) error {
