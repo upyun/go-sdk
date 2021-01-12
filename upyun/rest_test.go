@@ -321,6 +321,7 @@ func TestModifyMetadata(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
+	time.Sleep(time.Second)
 	err := up.Delete(&DeleteObjectConfig{
 		Path: REST_DIR,
 	})
