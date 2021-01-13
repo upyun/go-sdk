@@ -112,7 +112,7 @@ func jigsawProcess() {
 	// tasks 参考又拍云文档说明
 	tasks := []interface{}{
 		map[string]interface{}{
-			"image_matrix": [][]string{[]string{SAVE_KEY_IMAGE, SAVE_KEY_IMAGE}, []string{SAVE_KEY_IMAGE, SAVE_KEY_IMAGE}},
+			"image_matrix": [][]string{{SAVE_KEY_IMAGE, SAVE_KEY_IMAGE}, {SAVE_KEY_IMAGE, SAVE_KEY_IMAGE}},
 			"save_as":      SAVE_AS_IMAGE,
 		},
 	}

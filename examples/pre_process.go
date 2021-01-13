@@ -48,7 +48,7 @@ func syncPreProcess(localPath string, saveKey string, options map[string]interfa
 func imageAsyncPreProcess() {
 	// apps 参考又拍云文档说明
 	apps := []map[string]interface{}{
-		map[string]interface{}{
+		{
 			"name":           "thumb",
 			"x-gmkerl-thumb": "/format/png",
 			"save_as":        SAVE_AS_IMAGE,
@@ -64,7 +64,7 @@ func imageAsyncPreProcess() {
 func videoAsyncPreProcess() {
 	// apps 参考又拍云文档说明
 	apps := []map[string]interface{}{
-		map[string]interface{}{
+		{
 			"name":    "naga",
 			"type":    "video",
 			"avopts":  "/s/128x96",
@@ -81,7 +81,7 @@ func videoAsyncPreProcess() {
 func fileConvertAsyncPreProcess() {
 	// apps 参考又拍云文档说明
 	apps := []map[string]interface{}{
-		map[string]interface{}{
+		{
 			"name":    "uconvert",
 			"save_as": SAVE_AS_DOC,
 		},
@@ -96,7 +96,7 @@ func fileConvertAsyncPreProcess() {
 func imageAuditAsyncPreProcess() {
 	// apps 参考又拍云文档说明
 	apps := []map[string]interface{}{
-		map[string]interface{}{
+		{
 			"name": "imgaudit",
 		},
 	}
@@ -110,7 +110,7 @@ func imageAuditAsyncPreProcess() {
 func videoAuditAsyncPreProcess() {
 	// apps 参考又拍云文档说明
 	apps := []map[string]interface{}{
-		map[string]interface{}{
+		{
 			"name": "videoaudit",
 		},
 	}

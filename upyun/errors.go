@@ -11,7 +11,7 @@ import (
 type Error struct {
 	Code       int    `json:"code"`
 	Message    string `json:"msg"`
-	RequestId  string `json:"id"`
+	RequestID  string `json:"id"`
 	Operation  string
 	StatusCode int
 	Header     http.Header
@@ -24,7 +24,7 @@ func (e *Error) Error() string {
 	}
 
 	return fmt.Sprintf("%s error: status=%d, code=%d, message=%s, request-id=%s",
-		e.Operation, e.StatusCode, e.Code, e.Message, e.RequestId)
+		e.Operation, e.StatusCode, e.Code, e.Message, e.RequestID)
 }
 
 func checkResponse(res *http.Response) error {
@@ -73,7 +73,6 @@ func errorOperation(op string, err error) error {
 	if ok {
 		ae.Operation = op
 		return ae
-	} else {
-		return fmt.Errorf("%s: %w", op, err)
 	}
+	return fmt.Errorf("%s: %w", op, err)
 }

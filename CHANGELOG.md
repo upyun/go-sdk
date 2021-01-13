@@ -1,5 +1,18 @@
 # UPYUN Go SDK ChangeLog
 
+## Version v3.0.1 (2021.1.6)
+
+### features
+
+1. escape copy/move source key
+2. add lint
+
+## Version v3.0.0 (2020.7.24)
+
+### features
+
+1. support go mod
+
 ## Version 2.2.0 (2020.4.1)
 
 ### features

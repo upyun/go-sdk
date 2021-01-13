@@ -1,13 +1,17 @@
 # UPYUN Go SDK
 
-[![Release Version](https://img.shields.io/github/release/upyun/go-sdk.svg)](https://github.com/upyun/go-sdk/releases/latest)
-[![Build Status](https://travis-ci.org/upyun/go-sdk.svg?branch=master)](https://travis-ci.org/upyun/go-sdk)
+[![API Reference](https://img.shields.io/badge/api-reference-blue.svg)](https://help.upyun.com/docs/storage/)
+![GitHub tag (latest by date)](https://img.shields.io/github/v/tag/upyun/go-sdk?label=latest%20release)
+![Build](https://github.com/upyun/go-sdk/workflows/Build/badge.svg)
+![Lint](https://github.com/upyun/go-sdk/workflows/lint/badge.svg)
+![Test](https://github.com/upyun/go-sdk/workflows/test/badge.svg)
 [![Go Report Card](https://goreportcard.com/badge/github.com/upyun/go-sdk)](https://goreportcard.com/report/github.com/upyun/go-sdk)
 [![Sourcegraph](https://sourcegraph.com/github.com/upyun/go-sdk/-/badge.svg)](https://sourcegraph.com/github.com/upyun/go-sdk?badge)
 
     import "github.com/upyun/go-sdk/v3/upyun/"
 
 又拍云 Go SDK, 集成：
+
 - [又拍云 HTTP REST 接口](http://docs.upyun.com/api/rest_api/)
 - [又拍云 HTTP FORM 接口](http://docs.upyun.com/api/form_api/)
 - [又拍云缓存刷新接口](http://docs.upyun.com/api/purge/)
@@ -435,5 +439,4 @@ type SyncCommonTask struct {
 `SyncCommonTask` 提供同步任务所需的参数，适用于 `CommitSyncTasks`。有几点需要注意：
 - 使用 `p1.api.upyun.com` 同步任务接口，如果没有提供单独的接口，请使用 `SyncCommonTask`。
 - `Kwargs` 为请求参数。
-- `TaskUri` 为任务 `uri`，不包括服务名，例如 `/liveaudit/create`。 
-
+- `TaskUri` 为任务 `uri`，不包括服务名，例如 `/liveaudit/create`。
