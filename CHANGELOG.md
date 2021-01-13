@@ -1,5 +1,10 @@
 # UPYUN Go SDK ChangeLog
 
+## Version v3.0.2 (2021.1.13)
+
+1. add test 
+2. add error struct
+
 ## Version v3.0.1 (2021.1.6)
 
 ### features
