@@ -3,6 +3,7 @@ package upyun
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -157,7 +158,7 @@ func (up *UpYun) Usage() (n int64, err error) {
 	}
 
 	if err != nil {
-		return 0, fmt.Errorf("usage: %v", err)
+		return 0, errorOperation("usage", err)
 	}
 	return n, nil
 }
@@ -173,7 +174,7 @@ func (up *UpYun) Mkdir(path string) error {
 		closeBody: true,
 	})
 	if err != nil {
-		return fmt.Errorf("mkdir %s: %v", path, err)
+		return errorOperation(fmt.Sprintf("mkdir %s", path), err)
 	}
 	return nil
 }
@@ -183,14 +184,14 @@ func (up *UpYun) Get(config *GetObjectConfig) (fInfo *FileInfo, err error) {
 	if config.LocalPath != "" {
 		var fd *os.File
 		if fd, err = os.Create(config.LocalPath); err != nil {
-			return nil, fmt.Errorf("create file: %v", err)
+			return nil, errorOperation("create file", err)
 		}
 		defer fd.Close()
 		config.Writer = fd
 	}
 
 	if config.Writer == nil {
-		return nil, fmt.Errorf("no writer")
+		return nil, errors.New("no writer")
 	}
 
 	resp, err := up.doRESTRequest(&restReqConfig{
@@ -198,7 +199,7 @@ func (up *UpYun) Get(config *GetObjectConfig) (fInfo *FileInfo, err error) {
 		uri:    config.Path,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("doRESTRequest: %v", err)
+		return nil, errorOperation(fmt.Sprintf("get %s", config.Path), err)
 	}
 	defer resp.Body.Close()
 
@@ -206,7 +207,7 @@ func (up *UpYun) Get(config *GetObjectConfig) (fInfo *FileInfo, err error) {
 	fInfo.Name = config.Path
 
 	if fInfo.Size, err = io.Copy(config.Writer, resp.Body); err != nil {
-		return nil, fmt.Errorf("io copy: %v", err)
+		return nil, errorOperation("io copy", err)
 	}
 	return
 }
@@ -229,7 +230,7 @@ func (up *UpYun) put(config *PutObjectConfig) error {
 		useMD5:    config.UseMD5,
 	})
 	if err != nil {
-		return fmt.Errorf("doRESTRequest: %v", err)
+		return errorOperation(fmt.Sprintf("put %s", config.Path), err)
 	}
 	return nil
 }
@@ -254,12 +255,12 @@ func getPartInfo(partSize, fsize int64) (int64, int64, error) {
 func (up *UpYun) resumePut(config *PutObjectConfig) error {
 	f, ok := config.Reader.(*os.File)
 	if !ok {
-		return fmt.Errorf("resumePut: type != *os.File")
+		return errors.New("resumePut: type != *os.File")
 	}
 
 	fileinfo, err := f.Stat()
 	if err != nil {
-		return fmt.Errorf("Stat: %v", err)
+		return errorOperation("stat", err)
 	}
 
 	fsize := fileinfo.Size()
@@ -295,7 +296,7 @@ func (up *UpYun) resumePut(config *PutObjectConfig) error {
 		}
 		fragFile, err := newFragmentFile(f, curSize, partSize)
 		if err != nil {
-			return fmt.Errorf("newFragmentFile: %v", err)
+			return errorOperation("new fragment file", err)
 		}
 
 		try := 0
@@ -329,7 +330,7 @@ func (up *UpYun) Put(config *PutObjectConfig) (err error) {
 	if config.LocalPath != "" {
 		var fd *os.File
 		if fd, err = os.Open(config.LocalPath); err != nil {
-			return fmt.Errorf("open file: %v", err)
+			return errorOperation("open file", err)
 		}
 		defer fd.Close()
 		config.Reader = fd
@@ -354,7 +355,7 @@ func (up *UpYun) Move(config *MoveObjectConfig) error {
 		headers: headers,
 	})
 	if err != nil {
-		return fmt.Errorf("doRESTRequest: %v", err)
+		return errorOperation("move source", err)
 	}
 	return nil
 }
@@ -372,7 +373,7 @@ func (up *UpYun) Copy(config *CopyObjectConfig) error {
 		headers: headers,
 	})
 	if err != nil {
-		return fmt.Errorf("doRESTRequest: %v", err)
+		return errorOperation("copy source", err)
 	}
 	return nil
 }
@@ -380,7 +381,7 @@ func (up *UpYun) Copy(config *CopyObjectConfig) error {
 func (up *UpYun) InitMultipartUpload(config *InitMultipartUploadConfig) (*InitMultipartUploadResult, error) {
 	partSize, _, err := getPartInfo(config.PartSize, config.ContentLength)
 	if err != nil {
-		return nil, err
+		return nil, errorOperation("init multipart", err)
 	}
 	headers := make(map[string]string)
 	headers["X-Upyun-Multi-Type"] = config.ContentType
@@ -399,13 +400,13 @@ func (up *UpYun) InitMultipartUpload(config *InitMultipartUploadConfig) (*InitMu
 		closeBody: true,
 	})
 	if err != nil {
-		return nil, err
+		return nil, errorOperation("init multipart", err)
 	}
 	return &InitMultipartUploadResult{
 		UploadID: resp.Header.Get("X-Upyun-Multi-Uuid"),
 		Path:     config.Path,
 		PartSize: partSize,
-	}, err
+	}, nil
 }
 func (up *UpYun) UploadPart(initResult *InitMultipartUploadResult, part *UploadPartConfig) error {
 	headers := make(map[string]string)
@@ -423,7 +424,7 @@ func (up *UpYun) UploadPart(initResult *InitMultipartUploadResult, part *UploadP
 		httpBody:  part.Reader,
 	})
 	if err != nil {
-		return fmt.Errorf("doRESTRequest: %v", err)
+		return errorOperation("upload multipart", err)
 	}
 	return nil
 }
@@ -442,7 +443,7 @@ func (up *UpYun) CompleteMultipartUpload(initResult *InitMultipartUploadResult, 
 		headers: headers,
 	})
 	if err != nil {
-		return fmt.Errorf("doRESTRequest: %v", err)
+		return errorOperation("complete multipart", err)
 	}
 	return nil
 }
@@ -464,18 +465,18 @@ func (up *UpYun) ListMultipartUploads(config *ListMultipartConfig) (*ListMultipa
 		useMD5:    false,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("ListMultipartUploads: %v", err)
+		return nil, errorOperation("list multipart", err)
 	}
 
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		return nil, fmt.Errorf("ListMultipartUploads reader body: %v", err)
+		return nil, errorOperation("list multipart read body", err)
 	}
 
 	result := &ListMultipartUploadResult{}
 	err = json.Unmarshal(body, result)
 	if err != nil {
-		return nil, fmt.Errorf("ListMultipartUploads json unmarshal: %v", err)
+		return nil, errorOperation("list multipart read body", err)
 	}
 	return result, nil
 }
@@ -495,18 +496,18 @@ func (up *UpYun) ListMultipartParts(intiResult *InitMultipartUploadResult, confi
 		useMD5:    false,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("ListUploadedParts: %v", err)
+		return nil, errorOperation("list multipart parts", err)
 	}
 
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		return nil, fmt.Errorf("ListUploadedParts reader body: %v", err)
+		return nil, errorOperation("list multipart parts read body", err)
 	}
 
 	result := &ListUploadedPartsResult{}
 	err = json.Unmarshal(body, result)
 	if err != nil {
-		return nil, fmt.Errorf("ListUploadedParts json unmarshal: %v", err)
+		return nil, errorOperation("list multipart parts read body", err)
 	}
 	return result, nil
 }
@@ -525,11 +526,7 @@ func (up *UpYun) Delete(config *DeleteObjectConfig) error {
 		closeBody: true,
 	})
 	if err != nil {
-		if e, ok := err.(Error); ok {
-			e.error = fmt.Errorf("delete %s: %v", config.Path, err)
-			return e
-		}
-		return fmt.Errorf("delete %s: %v", config.Path, err)
+		return errorOperation("delete", err)
 	}
 	return nil
 }
@@ -541,11 +538,7 @@ func (up *UpYun) GetInfo(path string) (*FileInfo, error) {
 		closeBody: true,
 	})
 	if err != nil {
-		if e, ok := err.(Error); ok {
-			e.error = fmt.Errorf("getinfo %s: %v", path, err)
-			return nil, e
-		}
-		return nil, fmt.Errorf("getinfo %s: %v", path, err)
+		return nil, errorOperation("get info", err)
 	}
 	fInfo := parseHeaderToFileInfo(resp.Header, true)
 	fInfo.Name = path
@@ -554,7 +547,7 @@ func (up *UpYun) GetInfo(path string) (*FileInfo, error) {
 
 func (up *UpYun) List(config *GetObjectsConfig) error {
 	if config.ObjectsChan == nil {
-		return fmt.Errorf("ObjectsChan == nil")
+		return errors.New("ObjectsChan is nil")
 	}
 	if config.Headers == nil {
 		config.Headers = make(map[string]string)
@@ -587,24 +580,26 @@ func (up *UpYun) List(config *GetObjectsConfig) error {
 		})
 
 		if err != nil {
-			if _, ok := err.(net.Error); ok {
+			var nerr net.Error
+			if ok := errors.As(err, &nerr); ok {
 				config.try++
 				if config.MaxListTries == 0 || config.try < config.MaxListTries {
+					time.Sleep(10 * time.Millisecond)
 					continue
 				}
 			}
-			return err
+			return errorOperation("list", err)
 		}
 
 		b, err := ioutil.ReadAll(resp.Body)
 		resp.Body.Close()
 		if err != nil {
-			return fmt.Errorf("ioutil ReadAll: %v", err)
+			return errorOperation("list read body", err)
 		}
 
 		iter, files, err := parseBodyToFileInfos(b)
 		if err != nil {
-			return fmt.Errorf("parse list body: %v", err)
+			return errorOperation("list read body", err)
 		}
 		for _, fInfo := range files {
 			if fInfo.IsDir && (config.level+1 < config.MaxListLevel || config.MaxListLevel == -1) {
@@ -665,7 +660,10 @@ func (up *UpYun) ModifyMetadata(config *ModifyMetadataConfig) error {
 		headers:   config.Headers,
 		closeBody: true,
 	})
-	return err
+	if err != nil {
+		return errorOperation("modify metadata", err)
+	}
+	return nil
 }
 
 func (up *UpYun) doRESTRequest(config *restReqConfig) (*http.Response, error) {
@@ -731,17 +729,7 @@ func (up *UpYun) doRESTRequest(config *restReqConfig) (*http.Response, error) {
 
 	resp, err := up.doHTTPRequest(config.method, url, headers, config.httpBody)
 	if err != nil {
-		// Don't modify net error
 		return nil, err
-	}
-
-	if resp.StatusCode/100 != 2 {
-		body, _ := ioutil.ReadAll(resp.Body)
-		resp.Body.Close()
-		return resp, Error{
-			fmt.Errorf("%s %d %s", config.method, resp.StatusCode, string(body)),
-			resp.StatusCode,
-		}
 	}
 
 	if config.closeBody {

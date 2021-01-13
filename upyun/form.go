@@ -91,11 +91,11 @@ func (up *UpYun) FormUpload(config *FormUploadConfig) (*FormUploadResp, error) {
 		return nil, err
 	}
 
-	b, _ := ioutil.ReadAll(resp.Body)
+	b, err := ioutil.ReadAll(resp.Body)
 	resp.Body.Close()
 
-	if resp.StatusCode/100 != 2 {
-		return nil, fmt.Errorf("%s", string(b))
+	if err != nil {
+		return nil, errorOperation("form read body", err)
 	}
 
 	var r FormUploadResp
@@ -140,5 +140,9 @@ func (up *UpYun) doFormRequest(url string, formValues map[string]string) (*http.
 	}
 
 	body := io.MultiReader(formBody, fd, bdBuf)
-	return up.doHTTPRequest("POST", url, headers, body)
+	resp, err := up.doHTTPRequest("POST", url, headers, body)
+	if err != nil {
+		return nil, errorOperation("form", err)
+	}
+	return resp, nil
 }

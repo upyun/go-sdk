@@ -2,7 +2,6 @@ package upyun
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	URL "net/url"
 	"strings"
@@ -30,29 +29,25 @@ func (up *UpYun) Purge(urls []string) (fails []string, err error) {
 	body := strings.NewReader(form.Encode())
 	resp, err := up.doHTTPRequest("POST", purge, headers, body)
 	if err != nil {
-		return fails, err
+		return fails, errorOperation("purge", err)
 	}
 	defer resp.Body.Close()
 
 	content, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
+		return fails, errorOperation("purge read body", err)
+	}
+
+	result := map[string]interface{}{}
+	if err := json.Unmarshal(content, &result); err != nil {
 		return fails, err
 	}
-
-	if resp.StatusCode/100 == 2 {
-		result := map[string]interface{}{}
-		if err := json.Unmarshal(content, &result); err != nil {
-			return fails, err
-		}
-		if it, ok := result["invalid_domain_of_url"]; ok {
-			if urls, ok := it.([]interface{}); ok {
-				for _, url := range urls {
-					fails = append(fails, url.(string))
-				}
+	if it, ok := result["invalid_domain_of_url"]; ok {
+		if urls, ok := it.([]interface{}); ok {
+			for _, url := range urls {
+				fails = append(fails, url.(string))
 			}
 		}
-		return fails, nil
 	}
-
-	return nil, fmt.Errorf("purge %d %s", resp.StatusCode, string(content))
+	return fails, nil
 }

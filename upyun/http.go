@@ -2,7 +2,6 @@ package upyun
 
 import (
 	"bytes"
-	//	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -52,7 +51,15 @@ func (up *UpYun) doHTTPRequest(method, url string, headers map[string]string,
 
 	//	fmt.Printf("%+v\n", req)
 
-	return up.httpc.Do(req)
+	resp, err = up.httpc.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	err = checkResponse(resp)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
 }
 
 func (up *UpYun) doGetEndpoint(host string) string {

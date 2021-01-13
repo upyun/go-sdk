@@ -148,7 +148,7 @@ func readHTTPBodyToStr(resp *http.Response) (string, error) {
 	b, err := readHTTPBody(resp.Body)
 	resp.Body.Close()
 	if err != nil {
-		return "", fmt.Errorf("read http body: %v", err)
+		return "", errorOperation("read body", err)
 	}
 	return string(b), nil
 }
@@ -175,12 +175,12 @@ func readHTTPBodyToInt(resp *http.Response) (int64, error) {
 	b, err := readHTTPBody(resp.Body)
 	resp.Body.Close()
 	if err != nil {
-		return 0, fmt.Errorf("read http body: %v", err)
+		return 0, errorOperation("read body", err)
 	}
 
 	n, err := strconv.ParseInt(string(b), 10, 64)
 	if err != nil {
-		return 0, fmt.Errorf("parse int: %v", err)
+		return 0, errorOperation("parse int", err)
 	}
 	return n, nil
 }

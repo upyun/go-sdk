@@ -128,16 +128,13 @@ func (up *UpYun) doProcessRequest(method, uri string,
 	}
 
 	if err != nil {
-		return err
+		return errorOperation("process", err)
 	}
 
 	b, err := ioutil.ReadAll(resp.Body)
 	resp.Body.Close()
 	if err != nil {
-		return err
-	}
-	if resp.StatusCode/100 != 2 {
-		return fmt.Errorf("%d %s", resp.StatusCode, string(b))
+		return errorOperation("process read body", err)
 	}
 
 	return json.Unmarshal(b, v)
@@ -215,16 +212,13 @@ func (up *UpYun) doSyncProcessRequest(method, uri string, payload string) (map[s
 		return nil, fmt.Errorf("Unknown method")
 	}
 	if err != nil {
-		return nil, err
+		return nil, errorOperation("sync process", err)
 	}
 
 	b, err := ioutil.ReadAll(resp.Body)
 	resp.Body.Close()
 	if err != nil {
 		return nil, err
-	}
-	if resp.StatusCode/100 != 2 {
-		return nil, fmt.Errorf("%d %s", resp.StatusCode, string(b))
 	}
 
 	var v map[string]interface{}
