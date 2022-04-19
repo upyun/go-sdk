@@ -26,26 +26,37 @@ func (up *UpYun) doHTTPRequest(method, url string, headers map[string]string,
 
 	req.Header.Set("User-Agent", up.UserAgent)
 	if method == "PUT" || method == "POST" {
+		found := false
 		length := req.Header.Get("Content-Length")
 		if length != "" {
 			req.ContentLength, _ = strconv.ParseInt(length, 10, 64)
+			found = true
 		} else {
 			switch v := body.(type) {
 			case *os.File:
 				if fInfo, err := v.Stat(); err == nil {
 					req.ContentLength = fInfo.Size()
+					found = true
 				}
 			case UpYunPutReader:
 				req.ContentLength = int64(v.Len())
+				found = true
 			case *bytes.Buffer:
 				req.ContentLength = int64(v.Len())
+				found = true
 			case *bytes.Reader:
 				req.ContentLength = int64(v.Len())
+				found = true
 			case *strings.Reader:
 				req.ContentLength = int64(v.Len())
+				found = true
 			case *io.LimitedReader:
 				req.ContentLength = v.N
+				found = true
 			}
+		}
+		if found && req.ContentLength == 0 {
+			req.Body = nil
 		}
 	}
 
