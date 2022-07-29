@@ -223,10 +223,11 @@ func parseBodyToFileInfos(b []byte) (iter string, fInfos []*FileInfo, err error)
 
 	for i, f := range files.Files {
 		fInfos[i] = &FileInfo{
-			Name:  f.Name,
-			IsDir: f.ContentType == "folder",
-			Size:  f.Length,
-			Time:  time.Unix(f.LastModified, 0),
+			Name:        f.Name,
+			IsDir:       f.ContentType == "folder",
+			ContentType: f.ContentType,
+			Size:        f.Length,
+			Time:        time.Unix(f.LastModified, 0),
 		}
 	}
 	return
