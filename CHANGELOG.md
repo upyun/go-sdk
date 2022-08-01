@@ -1,5 +1,10 @@
 # UPYUN Go SDK ChangeLog
 
+## Version v3.0.3 (2022.8.1)
+
+1. fix err when content-length == 0
+2. list add content-type info
+
 ## Version v3.0.2 (2021.1.13)
 
 1. add test 
