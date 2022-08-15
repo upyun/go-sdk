@@ -195,8 +195,9 @@ func (up *UpYun) Get(config *GetObjectConfig) (fInfo *FileInfo, err error) {
 	}
 
 	resp, err := up.doRESTRequest(&restReqConfig{
-		method: "GET",
-		uri:    config.Path,
+		method:  "GET",
+		uri:     config.Path,
+		headers: config.Headers,
 	})
 	if err != nil {
 		return nil, errorOperation(fmt.Sprintf("get %s", config.Path), err)
@@ -685,7 +686,9 @@ func (up *UpYun) doRESTRequest(config *restReqConfig) (*http.Response, error) {
 	}
 
 	headers["Date"] = makeRFC1123Date(time.Now())
-	headers["Host"] = "v0.api.upyun.com"
+	if headers["Host"] != "" {
+		headers["Host"] = "v0.api.upyun.com"
+	}
 
 	if !hasMD5 && config.useMD5 {
 		switch v := config.httpBody.(type) {
