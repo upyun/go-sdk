@@ -60,6 +60,11 @@ type GetObjectsConfig struct {
 	try     int
 }
 
+type GetRequestConfig struct {
+	Path    string
+	Headers map[string]string
+}
+
 // PutObjectConfig provides a configuration to Put method.
 type PutObjectConfig struct {
 	Path            string
@@ -529,6 +534,24 @@ func (up *UpYun) Delete(config *DeleteObjectConfig) error {
 		return errorOperation("delete", err)
 	}
 	return nil
+}
+
+// GetRequest return response
+func (up *UpYun) GetRequest(config *GetRequestConfig) (*http.Response, error) {
+	if config.Path == "" {
+		return nil, errors.New("needed set config.Path")
+	}
+
+	resp, err := up.doRESTRequest(&restReqConfig{
+		method:  "GET",
+		uri:     config.Path,
+		headers: config.Headers,
+	})
+	if err != nil {
+		return nil, errorOperation(fmt.Sprintf("get %s", config.Path), err)
+	}
+
+	return resp, nil
 }
 
 func (up *UpYun) GetInfo(path string) (*FileInfo, error) {
