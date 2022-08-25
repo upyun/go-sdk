@@ -179,7 +179,6 @@ func (up *UpYun) Mkdir(path string) error {
 	return nil
 }
 
-// TODO: maybe directory
 func (up *UpYun) Get(config *GetObjectConfig) (fInfo *FileInfo, err error) {
 	if config.LocalPath != "" {
 		var fd *os.File
@@ -190,13 +189,20 @@ func (up *UpYun) Get(config *GetObjectConfig) (fInfo *FileInfo, err error) {
 		config.Writer = fd
 	}
 
+	if config.Headers == nil {
+		config.Headers = make(map[string]string)
+	}
+
+	config.Headers["x-upyun-folder"] = "false"
+
 	if config.Writer == nil {
 		return nil, errors.New("no writer")
 	}
 
 	resp, err := up.doRESTRequest(&restReqConfig{
-		method: "GET",
-		uri:    config.Path,
+		method:  "GET",
+		uri:     config.Path,
+		headers: config.Headers,
 	})
 	if err != nil {
 		return nil, errorOperation(fmt.Sprintf("get %s", config.Path), err)
