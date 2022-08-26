@@ -339,3 +339,22 @@ func TestDelete(t *testing.T) {
 	})
 	Nil(t, err)
 }
+
+func TestListObjects(t *testing.T) {
+	fpath := "/upyun"
+	config := &ListObjectsConfig{
+		Path:         fpath,
+		MaxListTries: 0,
+		DescOrder:    false,
+		Iter:         "",
+		Limit:        30,
+	}
+	fileInfos, iter, err := up.ListObjects(config)
+	if err != nil {
+		t.Logf("ls %s: %v", fpath, err)
+	}
+	for _, fInfo := range fileInfos {
+		t.Logf(fInfo.Name)
+	}
+	t.Log(iter)
+}
