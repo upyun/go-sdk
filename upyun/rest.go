@@ -572,6 +572,10 @@ func (up *UpYun) List(config *GetObjectsConfig) error {
 		defer close(config.ObjectsChan)
 	}
 
+	if config.MaxListTries <= 0 {
+		config.MaxListTries = 5
+	}
+
 	for {
 		resp, err := up.doRESTRequest(&restReqConfig{
 			method:  "GET",
@@ -583,7 +587,7 @@ func (up *UpYun) List(config *GetObjectsConfig) error {
 			var nerr net.Error
 			if ok := errors.As(err, &nerr); ok {
 				config.try++
-				if config.MaxListTries == 0 || config.try < config.MaxListTries {
+				if config.try < config.MaxListTries {
 					time.Sleep(10 * time.Millisecond)
 					continue
 				}
