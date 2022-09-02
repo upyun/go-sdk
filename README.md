@@ -287,6 +287,7 @@ type PutObjectConfig struct {
         AppendContent     bool                  // 是否需要追加文件内容
         ResumePartSize    int64                 // 断点续传块大小
         MaxResumePutTries int                   // 断点续传最大重试次数
+        ProcessFile       string                // 记录断续上传的进度
 }
 ```
 
