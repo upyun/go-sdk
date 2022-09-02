@@ -23,6 +23,7 @@ const (
 	MaxListTries         = 5
 	MaxLimit             = 4096
 	DefaultLimit         = 256
+	ProcessSaveDir       = "/tmp/"
 )
 
 type restReqConfig struct {
@@ -85,6 +86,7 @@ type PutObjectConfig struct {
 	// AppendContent     bool
 	ResumePartSize    int64
 	MaxResumePutTries int
+	ProcessFile       string
 }
 
 type MoveObjectConfig struct {
@@ -119,6 +121,12 @@ type InitMultipartUploadResult struct {
 	UploadID string
 	Path     string
 	PartSize int64
+}
+
+type RecordResult struct {
+	*InitMultipartUploadResult
+	CurrentID   int
+	CurrentSize int64
 }
 
 type DeleteObjectConfig struct {
@@ -339,6 +347,153 @@ func (up *UpYun) resumePut(config *PutObjectConfig) error {
 	return up.CompleteMultipartUpload(uploadInfo, completeConfig)
 }
 
+func (up *UpYun) checkFileExist(config *PutObjectConfig) bool {
+	fd, err := os.Open(config.ProcessFile)
+	if err != nil {
+		return false
+	}
+	finfo, err := fd.Stat()
+	if err != nil {
+		return false
+	}
+	if finfo.Size() > 0 {
+		return true
+	}
+	return false
+}
+
+// resumePut2 切片上传
+// 切片上传的流程如下
+// 0. 准备工作， 检查是否配置了存放进度的文件, 检查上传文件是否存在, 校验切片大小是否设置
+// 1. 计算上传文件的大小fileInfo.Size(), 根据文件和切片的大小，计算需要切多少片maxPartID
+// 2. 如果为初次上传init阶段, 首次上传获取uploadInfo -> type InitMultipartUploadResult 上传成功后保存初次上传的信息uploadInfo 文件默认为.上传文件名_process
+// 3. 如果为中途切断后的二次上传，先从进度文件中获取 uploadInfo -> type InitMultipartUploadResult
+// 4. upload阶段, 无论是首次上传还是二次上传都有该阶段，每次上传记录ID
+// 5. 校验md5文件, 确定文件完整性
+func (up *UpYun) resumePut2(config *PutObjectConfig) error {
+
+	f, ok := config.Reader.(*os.File)
+	if !ok {
+		return errors.New("resumePut: type != *os.File")
+	}
+
+	fileInfo, err := f.Stat()
+	if err != nil {
+		return errorOperation("stat", err)
+	}
+
+	if config.ProcessFile == "" {
+		ProcessFilePath := fmt.Sprintf(".process_%s", fileInfo.Name())
+		config.ProcessFile = path.Join(ProcessSaveDir, ProcessFilePath)
+	}
+
+	// 初始化记录进度的文件
+	ff, _ := os.OpenFile(config.ProcessFile, os.O_RDWR|os.O_CREATE, os.ModePerm)
+	defer ff.Close()
+
+	fsize := fileInfo.Size()
+	if fsize < minResumePutFileSize {
+		return up.put(config)
+	}
+
+	if config.ResumePartSize == 0 {
+		config.ResumePartSize = DefaultPartSize
+	}
+
+	if config.MaxResumePutTries == 0 {
+		config.MaxResumePutTries = MaxListTries
+	}
+
+	maxPartID := int((fsize+config.ResumePartSize-1)/config.ResumePartSize - 1)
+
+	if config.Headers == nil {
+		config.Headers = make(map[string]string)
+	}
+
+	curSize, partSize := int64(0), config.ResumePartSize
+
+	var id = 0
+	var uploadInfo *InitMultipartUploadResult
+	var recordResult RecordResult
+	if !up.checkFileExist(config) {
+		headers := config.Headers
+		uploadInfo, err = up.InitMultipartUpload(&InitMultipartUploadConfig{
+			Path:          config.Path,
+			PartSize:      partSize,
+			ContentType:   headers["Content-Type"],
+			ContentLength: fsize,
+			OrderUpload:   true,
+		})
+		if err != nil {
+			return err
+		}
+		recordResult.InitMultipartUploadResult = uploadInfo
+		recordResult.CurrentID = 0
+		recordResult.CurrentSize = curSize
+		b, err := json.Marshal(recordResult)
+		if err != nil {
+			return err
+		}
+		ff.WriteString(string(b))
+	} else {
+		b, err := ioutil.ReadAll(ff)
+		if err != nil {
+			return errorOperation("read process file", err)
+		}
+		err = json.Unmarshal(b, &recordResult)
+		if err != nil {
+			return errorOperation("parse file to json", err)
+		}
+		uploadInfo = recordResult.InitMultipartUploadResult
+		id = recordResult.CurrentID
+		curSize = recordResult.CurrentSize
+	}
+
+	for ; id <= maxPartID; id++ {
+		// debug on-off 更加直观的展示切片上传的内容
+		// fmt.Println(id, "         ", curSize+partSize)
+		// 最后一次上传需要重定义上传的切片大小
+		if curSize+partSize > fsize {
+			partSize = fsize - curSize
+		}
+		fragFile, err := newFragmentFile(f, curSize, partSize)
+		if err != nil {
+			return errorOperation("new fragment file", err)
+		}
+
+		try := 0
+		for ; try < config.MaxResumePutTries; try++ {
+			_, err := up.UploadPart2(uploadInfo, &UploadPartConfig{
+				PartID:   id,
+				PartSize: partSize,
+				Reader:   fragFile,
+			})
+			if err == nil {
+				recordResult.CurrentID += 1
+				recordResult.CurrentSize = curSize + partSize
+				b, _ := json.Marshal(recordResult)
+				ioutil.WriteFile(config.ProcessFile, b, 0666)
+				break
+			}
+			fragFile.Seek(0, 0)
+		}
+
+		if config.MaxResumePutTries > 0 && try == config.MaxResumePutTries {
+			return err
+		}
+		curSize += partSize
+	}
+
+	completeConfig := &CompleteMultipartUploadConfig{}
+	if config.UseMD5 {
+		f.Seek(0, 0)
+		completeConfig.Md5, _ = md5File(f)
+	}
+	// debug on-off
+	// fmt.Printf("%v", uploadInfo)
+	return up.CompleteMultipartUpload(uploadInfo, completeConfig)
+}
+
 func (up *UpYun) Put(config *PutObjectConfig) (err error) {
 	if config.LocalPath != "" {
 		var fd *os.File
@@ -352,6 +507,24 @@ func (up *UpYun) Put(config *PutObjectConfig) (err error) {
 	if config.UseResumeUpload {
 		return up.resumePut(config)
 	}
+
+	return up.put(config)
+}
+
+func (up *UpYun) Put2(config *PutObjectConfig) (err error) {
+	if config.LocalPath != "" {
+		var fd *os.File
+		if fd, err = os.Open(config.LocalPath); err != nil {
+			return errorOperation("open file", err)
+		}
+		defer fd.Close()
+		config.Reader = fd
+	}
+
+	if config.UseResumeUpload {
+		return up.resumePut2(config)
+	}
+
 	return up.put(config)
 }
 
@@ -441,6 +614,40 @@ func (up *UpYun) UploadPart(initResult *InitMultipartUploadResult, part *UploadP
 	}
 	return nil
 }
+
+func (up *UpYun) UploadPart2(initResult *InitMultipartUploadResult, part *UploadPartConfig) (*InitMultipartUploadResult, error) {
+	headers := make(map[string]string)
+	headers["X-Upyun-Multi-Stage"] = "upload"
+	headers["X-Upyun-Multi-Uuid"] = initResult.UploadID
+	headers["X-Upyun-Part-Id"] = strconv.FormatInt(int64(part.PartID), 10)
+	headers["Content-Length"] = strconv.FormatInt(part.PartSize, 10)
+
+	resp, err := up.doRESTRequest(&restReqConfig{
+		method:    "PUT",
+		uri:       initResult.Path,
+		headers:   headers,
+		closeBody: true,
+		useMD5:    false,
+		httpBody:  part.Reader,
+	})
+	//fmt.Println(headers)
+	//fmt.Println(headers["X-Upyun-Part-Id"])
+	if err != nil {
+		return nil, errorOperation("upload multipart", err)
+	}
+	size, err := strconv.ParseInt(resp.Header["X-Upyun-Multi-Part-Size"][0], 10, 64)
+	if err != nil {
+		return nil, errorOperation("PartSize parse to int64 error ", err)
+	}
+	//log.Println(resp.Header["X-Upyun-Next-Part-Id"][0])
+	result := &InitMultipartUploadResult{
+		UploadID: resp.Header["X-Upyun-Multi-Uuid"][0],
+		Path:     initResult.Path,
+		PartSize: size,
+	}
+	return result, nil
+}
+
 func (up *UpYun) CompleteMultipartUpload(initResult *InitMultipartUploadResult, config *CompleteMultipartUploadConfig) error {
 	headers := make(map[string]string)
 	headers["X-Upyun-Multi-Stage"] = "complete"
@@ -493,7 +700,6 @@ func (up *UpYun) ListMultipartUploads(config *ListMultipartConfig) (*ListMultipa
 	}
 	return result, nil
 }
-
 func (up *UpYun) ListMultipartParts(intiResult *InitMultipartUploadResult, config *ListMultipartPartsConfig) (*ListUploadedPartsResult, error) {
 	headers := make(map[string]string)
 	headers["X-Upyun-Multi-Uuid"] = intiResult.UploadID
