@@ -49,6 +49,7 @@ Table of Contents
             * [PutObjectConfig](#putobjectconfig)
             * [GetObjectConfig](#getobjectconfig)
             * [GetObjectsConfig](#getobjectsconfig)
+            * [ListObjectsConfig](#listobjectsconfig)
             * [DeleteObjectConfig](#deleteobjectconfig)
             * [MoveObjectConfig](#moveobjectconfig)
             * [CopyObjectConfig](#copyobjectconfig)
@@ -331,6 +332,23 @@ type GetObjectsConfig struct {
 
 `GetObjectsConfig` 提供列目录所需的参数。当列目录结束后，SDK 会将 `ObjectsChan` 关闭掉。
 
+
+#### ListObjectsConfig
+
+```go
+type ListObjectsConfig struct {
+	Path         string            // 文件夹路径
+	Headers      map[string]string // 请求头
+	Iter         string            // 下次遍历目录的开始位置，第一次不需要输入，之后每次返回结果时会返回当前结束的位置, 即下次开始的位置
+	MaxListTries int               // 重试的次数最大值 默认5次
+	DescOrder    bool              // 正序or倒叙
+	Limit        int               // 每次遍历的文件个数，默认256 最大值4096
+
+	// Has unexported fields.
+}
+```
+
+`ListObjectsConfig` 提供给列目录并且需要手动分页的场景, 见example/list_files.go
 
 #### DeleteObjectConfig
 

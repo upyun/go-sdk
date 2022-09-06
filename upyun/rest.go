@@ -20,6 +20,9 @@ const (
 	DefaultPartSize      = 1024 * 1024
 	MaxPartNum           = 10000
 	minResumePutFileSize = 10 * 1024 * 1024
+	MaxListTries         = 5
+	MaxLimit             = 4096
+	DefaultLimit         = 256
 )
 
 type restReqConfig struct {
@@ -58,6 +61,21 @@ type GetObjectsConfig struct {
 	level   int
 	objNum  int
 	try     int
+}
+
+// ListObjectsConfig list objects Config
+type ListObjectsConfig struct {
+	Path         string            // 文件路径or文件夹路径
+	Headers      map[string]string // 请求头
+	Iter         string            // 下次遍历目录的开始位置，第一次不需要输入，之后每次返回结果时会返回当前结束的位置, 即下次开始的位置
+	MaxListTries int               // 重试的次数最大值
+	DescOrder    bool              // 正序or倒叙, 默认正序
+	Limit        int               // 每次遍历的文件个数，默认256 最大值为4096
+}
+
+type GetRequestConfig struct {
+	Path    string
+	Headers map[string]string
 }
 
 // PutObjectConfig provides a configuration to Put method.
@@ -179,7 +197,6 @@ func (up *UpYun) Mkdir(path string) error {
 	return nil
 }
 
-// TODO: maybe directory
 func (up *UpYun) Get(config *GetObjectConfig) (fInfo *FileInfo, err error) {
 	if config.LocalPath != "" {
 		var fd *os.File
@@ -190,13 +207,20 @@ func (up *UpYun) Get(config *GetObjectConfig) (fInfo *FileInfo, err error) {
 		config.Writer = fd
 	}
 
+	if config.Headers == nil {
+		config.Headers = make(map[string]string)
+	}
+
+	config.Headers["x-upyun-folder"] = "false"
+
 	if config.Writer == nil {
 		return nil, errors.New("no writer")
 	}
 
 	resp, err := up.doRESTRequest(&restReqConfig{
-		method: "GET",
-		uri:    config.Path,
+		method:  "GET",
+		uri:     config.Path,
+		headers: config.Headers,
 	})
 	if err != nil {
 		return nil, errorOperation(fmt.Sprintf("get %s", config.Path), err)
@@ -531,6 +555,24 @@ func (up *UpYun) Delete(config *DeleteObjectConfig) error {
 	return nil
 }
 
+// GetRequest return response
+func (up *UpYun) GetRequest(config *GetRequestConfig) (*http.Response, error) {
+	if config.Path == "" {
+		return nil, errors.New("needed set config.Path")
+	}
+
+	resp, err := up.doRESTRequest(&restReqConfig{
+		method:  "GET",
+		uri:     config.Path,
+		headers: config.Headers,
+	})
+	if err != nil {
+		return nil, errorOperation(fmt.Sprintf("get %s", config.Path), err)
+	}
+
+	return resp, nil
+}
+
 func (up *UpYun) GetInfo(path string) (*FileInfo, error) {
 	resp, err := up.doRESTRequest(&restReqConfig{
 		method:    "HEAD",
@@ -647,6 +689,75 @@ func (up *UpYun) List(config *GetObjectsConfig) error {
 		}
 		config.Headers["X-List-Iter"] = iter
 	}
+}
+
+func (up *UpYun) ListObjects(config *ListObjectsConfig) (fileInfos []*FileInfo, iter string, err error) {
+
+	if config.Headers == nil {
+		config.Headers = make(map[string]string)
+	}
+
+	if config.Limit == 0 || config.Limit > MaxLimit {
+		config.Headers["X-List-Limit"] = strconv.Itoa(DefaultLimit)
+	} else {
+		config.Headers["X-List-Limit"] = strconv.Itoa(config.Limit)
+	}
+
+	if config.DescOrder {
+		config.Headers["X-List-Order"] = "desc"
+	}
+
+	if config.Iter != "" {
+		config.Headers["x-list-iter"] = config.Iter
+	}
+
+	if config.MaxListTries <= 0 {
+		config.MaxListTries = MaxListTries
+	}
+
+	config.Headers["X-UpYun-Folder"] = "true"
+	config.Headers["Accept"] = "application/json"
+	var resp *http.Response
+	try := 0
+	for {
+		resp, err = up.doRESTRequest(&restReqConfig{
+			method:  "GET",
+			uri:     config.Path,
+			headers: config.Headers,
+		})
+
+		// 重试
+		if err != nil {
+			var nerr net.Error
+			if ok := errors.As(err, &nerr); ok {
+				try++
+				if try < config.MaxListTries {
+					time.Sleep(10 * time.Millisecond)
+					continue
+				}
+			}
+			return nil, "", errorOperation("list", err)
+		}
+		break
+	}
+
+	// 读取列表
+	b, err := ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		return nil, "", errorOperation("list read body", err)
+	}
+
+	iter, files, err := parseBodyToFileInfos(b)
+	if err != nil {
+		return nil, "", errorOperation("list read body", err)
+	}
+
+	if iter == "g2gCZAAEbmV4dGQAA2VvZg" {
+		return files, "", nil
+	}
+
+	return files, iter, nil
 }
 
 func (up *UpYun) ModifyMetadata(config *ModifyMetadataConfig) error {

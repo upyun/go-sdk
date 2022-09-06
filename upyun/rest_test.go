@@ -339,3 +339,80 @@ func TestDelete(t *testing.T) {
 	})
 	Nil(t, err)
 }
+
+func putTestFilesToBucket(t *testing.T, remotePath string) []FileInfo {
+	var files []FileInfo
+
+	// 创建测试文件
+	msg := strings.Repeat("hello", 5)
+	for i := 0; i < 10; i++ {
+		file := fmt.Sprintf("%d.txt", i)
+		fd, err := os.Create(file)
+		Nil(t, err)
+		_, err = fd.WriteString(msg)
+		Nil(t, err)
+		stat, err := fd.Stat()
+		Nil(t, err)
+
+		hash, err := md5File(fd)
+		Nil(t, err)
+		files = append(files, FileInfo{
+			Name:  file,
+			Size:  stat.Size(),
+			IsDir: stat.IsDir(),
+			MD5:   hash,
+		})
+
+		defer func() {
+			err = os.RemoveAll(file)
+			Nil(t, err)
+		}()
+
+		err = up.Put(&PutObjectConfig{
+			Path:      path.Join(remotePath, file),
+			LocalPath: file,
+			UseMD5:    true,
+		})
+		Nil(t, err)
+	}
+	return files
+}
+
+func TestListObjects(t *testing.T) {
+	remotePath := "/go-sdk/lb/"
+	limit := 1
+
+	files := putTestFilesToBucket(t, remotePath)
+	config := &ListObjectsConfig{
+		Path:         remotePath,
+		MaxListTries: 0,
+		DescOrder:    false,
+		Iter:         "",
+		Limit:        limit,
+	}
+
+	var fileInfos []*FileInfo
+	for {
+		fileInfo, iter, err := up.ListObjects(config)
+		Nil(t, err)
+		NotNil(t, fileInfo)
+		NotNil(t, iter)
+		t.Log(iter) // 间隔
+		for _, item := range fileInfo {
+			fileInfos = append(fileInfos, item)
+			t.Log(item.Name)
+		}
+		if iter == "" {
+			break
+		}
+		config.Iter = iter
+	}
+
+	count := len(fileInfos)
+	for i := 0; i < count; i++ {
+		Equal(t, files[i].Name, fileInfos[i].Name)
+		Equal(t, files[i].IsDir, fileInfos[i].IsDir)
+		Equal(t, files[i].Size, fileInfos[i].Size)
+	}
+
+}
