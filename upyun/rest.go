@@ -276,79 +276,6 @@ func getPartInfo(partSize, fsize int64) (int64, int64, error) {
 	}
 	return partSize, partNum, nil
 }
-func (up *UpYun) resumePut(config *PutObjectConfig) error {
-	f, ok := config.Reader.(*os.File)
-	if !ok {
-		return errors.New("resumePut: type != *os.File")
-	}
-
-	fileinfo, err := f.Stat()
-	if err != nil {
-		return errorOperation("stat", err)
-	}
-
-	fsize := fileinfo.Size()
-	if fsize < minResumePutFileSize {
-		return up.put(config)
-	}
-
-	if config.ResumePartSize == 0 {
-		config.ResumePartSize = DefaultPartSize
-	}
-	maxPartID := int((fsize+config.ResumePartSize-1)/config.ResumePartSize - 1)
-
-	if config.Headers == nil {
-		config.Headers = make(map[string]string)
-	}
-
-	curSize, partSize := int64(0), config.ResumePartSize
-	headers := config.Headers
-	uploadInfo, err := up.InitMultipartUpload(&InitMultipartUploadConfig{
-		Path:          config.Path,
-		PartSize:      partSize,
-		ContentType:   headers["Content-Type"],
-		ContentLength: fsize,
-		OrderUpload:   true,
-	})
-	if err != nil {
-		return err
-	}
-
-	for id := 0; id <= maxPartID; id++ {
-		if curSize+partSize > fsize {
-			partSize = fsize - curSize
-		}
-		fragFile, err := newFragmentFile(f, curSize, partSize)
-		if err != nil {
-			return errorOperation("new fragment file", err)
-		}
-
-		try := 0
-		for ; config.MaxResumePutTries == 0 || try < config.MaxResumePutTries; try++ {
-			err = up.UploadPart(uploadInfo, &UploadPartConfig{
-				PartID:   id,
-				PartSize: partSize,
-				Reader:   fragFile,
-			})
-			if err == nil {
-				break
-			}
-			fragFile.Seek(0, 0)
-		}
-
-		if config.MaxResumePutTries > 0 && try == config.MaxResumePutTries {
-			return err
-		}
-		curSize += partSize
-	}
-
-	completeConfig := &CompleteMultipartUploadConfig{}
-	if config.UseMD5 {
-		f.Seek(0, 0)
-		completeConfig.Md5, _ = md5File(f)
-	}
-	return up.CompleteMultipartUpload(uploadInfo, completeConfig)
-}
 
 func (up *UpYun) Put(config *PutObjectConfig) (err error) {
 	if config.LocalPath != "" {
@@ -361,7 +288,8 @@ func (up *UpYun) Put(config *PutObjectConfig) (err error) {
 	}
 
 	if config.UseResumeUpload {
-		return up.resumePut(config)
+		_, err = up.resumePut(config, nil)
+		return err
 	}
 	return up.put(config)
 }
@@ -848,4 +776,154 @@ func (up *UpYun) doRESTRequest(config *restReqConfig) (*http.Response, error) {
 	}
 
 	return resp, nil
+}
+
+type BreakPointConfig struct {
+	UploadID   string
+	PartID     int
+	PartSize   int64
+	MaxPartID  int
+	Path       string
+	ContentMd5 string
+}
+
+func (up *UpYun) ResumePut(config *PutObjectConfig, breakPoint *BreakPointConfig) (point *BreakPointConfig, err error) {
+	if config.LocalPath != "" {
+		var fd *os.File
+		if fd, err = os.Open(config.LocalPath); err != nil {
+			return nil, errorOperation("open file", err)
+		}
+		defer fd.Close()
+		config.Reader = fd
+	}
+	if !config.UseResumeUpload {
+		return nil, up.put(config)
+	}
+	return up.resumePut(config, breakPoint)
+}
+
+func (up *UpYun) resumePut(config *PutObjectConfig, breakpoint *BreakPointConfig) (*BreakPointConfig, error) {
+	f, ok := config.Reader.(*os.File)
+	if !ok {
+		return breakpoint, errors.New("resumePut: type != *os.File")
+	}
+	fileinfo, err := f.Stat()
+	if err != nil {
+		return breakpoint, errorOperation("stat", err)
+	}
+
+	fsize := fileinfo.Size()
+	if fsize < minResumePutFileSize {
+		return breakpoint, up.put(config)
+	}
+
+	if config.ResumePartSize == 0 {
+		config.ResumePartSize = DefaultPartSize
+	}
+
+	if config.Headers == nil {
+		config.Headers = make(map[string]string)
+	}
+	headers := config.Headers
+
+	// first upload
+	var uploadInfo *InitMultipartUploadResult
+	if breakpoint == nil {
+		uploadInfo, err = up.InitMultipartUpload(&InitMultipartUploadConfig{
+			Path:          config.Path,
+			PartSize:      config.ResumePartSize,
+			ContentType:   headers["Content-Type"],
+			ContentLength: fsize,
+			OrderUpload:   true,
+		})
+		if err != nil {
+			return breakpoint, err
+		}
+		maxPartID := int((fsize+uploadInfo.PartSize-1)/uploadInfo.PartSize - 1)
+		breakpoint = &BreakPointConfig{
+			UploadID:  uploadInfo.UploadID,
+			PartSize:  uploadInfo.PartSize,
+			PartID:    0,
+			MaxPartID: maxPartID,
+			Path:      config.Path,
+		}
+	}
+
+	breakpoint, err = up.resumeUploadPart(breakpoint, f, config.MaxResumePutTries)
+	if err != nil {
+		return breakpoint, err
+	}
+
+	completeConfig := &CompleteMultipartUploadConfig{}
+	if config.UseMD5 {
+		f.Seek(0, 0)
+		completeConfig.Md5, _ = md5File(f)
+	}
+	return breakpoint, up.CompleteMultipartUpload(
+		&InitMultipartUploadResult{
+			UploadID: breakpoint.UploadID,
+			Path:     breakpoint.Path,
+			PartSize: breakpoint.PartSize,
+		}, completeConfig)
+}
+
+func (up *UpYun) resumeUploadPart(breakpoint *BreakPointConfig, f *os.File, maxResumePutTries int) (*BreakPointConfig, error) {
+	fileinfo, err := f.Stat()
+	if err != nil {
+		return breakpoint, errorOperation("stat", err)
+	}
+	fsize := fileinfo.Size()
+	maxPartID := int((fsize+breakpoint.PartSize-1)/breakpoint.PartSize - 1)
+	partID := breakpoint.PartID
+	curSize, partSize := int64(partID)*breakpoint.PartSize, breakpoint.PartSize
+
+	if breakpoint.ContentMd5 != "" {
+		// 判断之前上传的文件是否发生了修改
+		fmd5, err := fileBufMd5(f, partID, partSize)
+		if err != nil {
+			return breakpoint, err
+		}
+		if fmd5 != breakpoint.ContentMd5 {
+			return breakpoint, err
+		}
+	}
+
+	for id := partID; id <= maxPartID; id++ {
+		if curSize+partSize > fsize {
+			partSize = fsize - curSize
+		}
+		fragFile, err := newFragmentFile(f, curSize, partSize)
+		if err != nil {
+			return breakpoint, errorOperation("new fragment file", err)
+		}
+		try := 0
+		for ; maxResumePutTries == 0 || try < maxResumePutTries; try++ {
+			err = up.UploadPart(
+				&InitMultipartUploadResult{
+					UploadID: breakpoint.UploadID,
+					Path:     breakpoint.Path,
+					PartSize: breakpoint.PartSize,
+				},
+				&UploadPartConfig{
+					PartID:   id,
+					PartSize: partSize,
+					Reader:   fragFile,
+				})
+			if err == nil {
+				break
+			}
+		}
+		if maxResumePutTries > 0 && try == maxResumePutTries {
+			breakpoint.PartID = id
+			fmd5, err := fileBufMd5(f, partID, partSize)
+			if err != nil {
+				return nil, err
+			}
+			breakpoint.ContentMd5 = fmd5
+			return breakpoint, err
+		}
+		curSize += partSize
+	}
+
+	return breakpoint, err
 }

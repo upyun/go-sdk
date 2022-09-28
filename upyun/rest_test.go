@@ -416,3 +416,23 @@ func TestListObjects(t *testing.T) {
 	}
 
 }
+
+func TestResume(t *testing.T) {
+	fname := "10M"
+	fd, _ := os.Create(fname)
+	NotNil(t, fd)
+	kb := strings.Repeat("U", 1024*5)
+	for i := 0; i < (minResumePutFileSize/1024 + 2); i++ {
+		fd.WriteString(kb)
+	}
+	fd.Close()
+
+	defer os.RemoveAll(fname)
+	_, err := up.ResumePut(&PutObjectConfig{
+		Path:            "resume/test",
+		LocalPath:       fname,
+		UseMD5:          true,
+		UseResumeUpload: true,
+	}, nil)
+	Nil(t, err)
+}

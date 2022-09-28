@@ -29,6 +29,7 @@ Table of Contents
             * [获取空间存储使用量](#获取空间存储使用量)
             * [创建目录](#创建目录)
             * [上传](#上传)
+            * [续传](#续传)
             * [下载](#下载)
             * [删除](#删除)
             * [移动](#移动)
@@ -54,9 +55,11 @@ Table of Contents
             * [CopyObjectConfig](#copyobjectconfig)
             * [FormUploadConfig](#formuploadconfig)
             * [CommitTasksConfig](#committasksconfig)
+            * [BreakPointConfig](#breakpointconfig)
             * [LiveauditCreateTask](#liveauditcreatetask)
             * [LiveauditCancelTask](#liveauditcanceltask)
             * [SyncCommonTask](#synccommontask)
+  
 
 ## Projects using this SDK
 
@@ -137,6 +140,12 @@ func (up *UpYun) Mkdir(path string) error
 
 ```go
 func (up *UpYun) Put(config *PutObjectConfig) (err error)
+```
+
+#### 续传
+
+```go
+func (up *Upyun) ResumePut(config *PutObjectConfig, breakPoint *BreakPointConfig)(*BreakPointConfig, error)
 ```
 
 #### 下载
@@ -418,6 +427,22 @@ type CommitTasksConfig struct {
 ```
 
 `CommitTasksConfig` 提供提交异步任务所需的参数。`Accept` 跟 `Source` 仅与异步音视频处理有关。`Tasks` 是一个任务数组，数组中的每一个元素都是任务相关的参数（一般情况下为字典类型）。
+
+
+#### BreakPointConfig
+
+```go
+type BreakPointConfig struct {
+	UploadID   string
+	PartID     int
+	PartSize   int64
+	MaxPartID  int
+	Path       string 
+	ContentMd5 string  
+}
+```
+
+`BreakPointConfig` 提供续传所需的参数，在第一次使用 `ResumePut` 的时候，传入 `nil` 即可。若中途出现上传失败，会返回一个 `BreakPointConfig`，此时再次调用 `ResumePu` 并传入该 `BreakPointConfig`，即可开始续传。前提是保证之前上传的文件内容没有被修改，否则就会重新开始上传。 `ContentMd5` 为空字符串的时候不会对之前上传过的文件进行 MD5 校验。
 
 
 #### LiveauditCreateTask
