@@ -417,8 +417,8 @@ func TestListObjects(t *testing.T) {
 
 }
 
-func TestResume(t *testing.T) {
-	fname := "10M"
+func TestResumePutV2(t *testing.T) {
+	fname := "50M"
 	fd, _ := os.Create(fname)
 	NotNil(t, fd)
 	kb := strings.Repeat("U", 1024*5)
@@ -428,11 +428,12 @@ func TestResume(t *testing.T) {
 	fd.Close()
 
 	defer os.RemoveAll(fname)
-	_, err := up.ResumePut(&PutObjectConfig{
-		Path:            "resume/test",
+
+	err := up.Put(&PutObjectConfig{
+		Path:            REST_FILE_1M,
 		LocalPath:       fname,
 		UseMD5:          true,
 		UseResumeUpload: true,
-	}, nil)
+	})
 	Nil(t, err)
 }

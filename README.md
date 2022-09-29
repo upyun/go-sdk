@@ -437,12 +437,12 @@ type BreakPointConfig struct {
 	PartID     int
 	PartSize   int64
 	MaxPartID  int
-	Path       string 
+	UseMD5     bool
 	ContentMd5 string  
 }
 ```
 
-`BreakPointConfig` 提供续传所需的参数，在第一次使用 `ResumePut` 的时候，传入 `nil` 即可。若中途出现上传失败，会返回一个 `BreakPointConfig`，此时再次调用 `ResumePu` 并传入该 `BreakPointConfig`，即可开始续传。前提是保证之前上传的文件内容没有被修改，否则就会重新开始上传。 `ContentMd5` 为空字符串的时候不会对之前上传过的文件进行 MD5 校验。
+`BreakPointConfig` 提供续传所需的参数，在第一次使用 `ResumePut` 的时候，传入 `nil` 即可。若中途出现上传失败，会返回一个 `BreakPointConfig`，此时再次调用 `ResumePu` 并传入该 `BreakPointConfig`，即可开始续传。前提是保证之前上传的文件内容没有被修改，否则就会重新开始上传。 `UseMD5` 为 `false` 的时候不会对之前上传过的文件进行 MD5 校验。
 
 
 #### LiveauditCreateTask

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -783,7 +784,7 @@ type BreakPointConfig struct {
 	PartID     int
 	PartSize   int64
 	MaxPartID  int
-	Path       string
+	UseMD5     bool
 	ContentMd5 string
 }
 
@@ -796,25 +797,23 @@ func (up *UpYun) ResumePut(config *PutObjectConfig, breakPoint *BreakPointConfig
 		defer fd.Close()
 		config.Reader = fd
 	}
-	if !config.UseResumeUpload {
-		return nil, up.put(config)
-	}
 	return up.resumePut(config, breakPoint)
 }
 
 func (up *UpYun) resumePut(config *PutObjectConfig, breakpoint *BreakPointConfig) (*BreakPointConfig, error) {
 	f, ok := config.Reader.(*os.File)
 	if !ok {
-		return breakpoint, errors.New("resumePut: type != *os.File")
+		return nil, errors.New("resumePut: type != *os.File")
 	}
+
 	fileinfo, err := f.Stat()
 	if err != nil {
-		return breakpoint, errorOperation("stat", err)
+		return nil, errorOperation("stat", err)
 	}
 
 	fsize := fileinfo.Size()
 	if fsize < minResumePutFileSize {
-		return breakpoint, up.put(config)
+		return nil, up.put(config)
 	}
 
 	if config.ResumePartSize == 0 {
@@ -837,19 +836,19 @@ func (up *UpYun) resumePut(config *PutObjectConfig, breakpoint *BreakPointConfig
 			OrderUpload:   true,
 		})
 		if err != nil {
-			return breakpoint, err
+			return nil, err
 		}
+
 		maxPartID := int((fsize+uploadInfo.PartSize-1)/uploadInfo.PartSize - 1)
 		breakpoint = &BreakPointConfig{
 			UploadID:  uploadInfo.UploadID,
 			PartSize:  uploadInfo.PartSize,
 			PartID:    0,
 			MaxPartID: maxPartID,
-			Path:      config.Path,
 		}
 	}
 
-	breakpoint, err = up.resumeUploadPart(breakpoint, f, config.MaxResumePutTries)
+	breakpoint, err = up.resumeUploadPart(config, breakpoint, f, fileinfo)
 	if err != nil {
 		return breakpoint, err
 	}
@@ -859,49 +858,55 @@ func (up *UpYun) resumePut(config *PutObjectConfig, breakpoint *BreakPointConfig
 		f.Seek(0, 0)
 		completeConfig.Md5, _ = md5File(f)
 	}
+
 	return breakpoint, up.CompleteMultipartUpload(
 		&InitMultipartUploadResult{
 			UploadID: breakpoint.UploadID,
-			Path:     breakpoint.Path,
+			Path:     config.Path,
 			PartSize: breakpoint.PartSize,
 		}, completeConfig)
 }
 
-func (up *UpYun) resumeUploadPart(breakpoint *BreakPointConfig, f *os.File, maxResumePutTries int) (*BreakPointConfig, error) {
-	fileinfo, err := f.Stat()
-	if err != nil {
-		return breakpoint, errorOperation("stat", err)
-	}
-	fsize := fileinfo.Size()
+func (up *UpYun) resumeUploadPart(config *PutObjectConfig, breakpoint *BreakPointConfig, f *os.File, fileInfo fs.FileInfo) (*BreakPointConfig, error) {
+
+	fsize := fileInfo.Size()
 	maxPartID := int((fsize+breakpoint.PartSize-1)/breakpoint.PartSize - 1)
 	partID := breakpoint.PartID
 	curSize, partSize := int64(partID)*breakpoint.PartSize, breakpoint.PartSize
 
-	if breakpoint.ContentMd5 != "" {
-		// 判断之前上传的文件是否发生了修改
-		fmd5, err := fileBufMd5(f, partID, partSize)
-		if err != nil {
-			return breakpoint, err
+	if breakpoint.UseMD5 {
+		if breakpoint.ContentMd5 != "" {
+			// 判断之前上传的文件是否发生了修改
+			fmd5, err := fileBufMd5(f, partID, partSize)
+			if err != nil {
+				return nil, err
+			}
+			if fmd5 != breakpoint.ContentMd5 {
+				return breakpoint, err
+			}
 		}
-		if fmd5 != breakpoint.ContentMd5 {
-			return breakpoint, err
-		}
+	}
+
+	if isFileExpired(fileInfo, fsize) {
+		return nil, errors.New("resume file has expired")
 	}
 
 	for id := partID; id <= maxPartID; id++ {
 		if curSize+partSize > fsize {
 			partSize = fsize - curSize
 		}
+
 		fragFile, err := newFragmentFile(f, curSize, partSize)
 		if err != nil {
 			return breakpoint, errorOperation("new fragment file", err)
 		}
+
 		try := 0
-		for ; maxResumePutTries == 0 || try < maxResumePutTries; try++ {
+		for ; config.MaxResumePutTries == 0 || try < config.MaxResumePutTries; try++ {
 			err = up.UploadPart(
 				&InitMultipartUploadResult{
 					UploadID: breakpoint.UploadID,
-					Path:     breakpoint.Path,
+					Path:     config.Path,
 					PartSize: breakpoint.PartSize,
 				},
 				&UploadPartConfig{
@@ -913,11 +918,12 @@ func (up *UpYun) resumeUploadPart(breakpoint *BreakPointConfig, f *os.File, maxR
 				break
 			}
 		}
-		if maxResumePutTries > 0 && try == maxResumePutTries {
+
+		if config.MaxResumePutTries > 0 && try == config.MaxResumePutTries {
 			breakpoint.PartID = id
 			fmd5, err := fileBufMd5(f, partID, partSize)
 			if err != nil {
-				return nil, err
+				return breakpoint, err
 			}
 			breakpoint.ContentMd5 = fmd5
 			return breakpoint, err
@@ -925,5 +931,5 @@ func (up *UpYun) resumeUploadPart(breakpoint *BreakPointConfig, f *os.File, maxR
 		curSize += partSize
 	}
 
-	return breakpoint, err
+	return breakpoint, nil
 }

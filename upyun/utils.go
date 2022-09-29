@@ -255,3 +255,7 @@ func fileBufMd5(f *os.File, partID int, partSize int64) (string, error) {
 	sum := md5.Sum(buf)
 	return hex.EncodeToString(sum[:]), nil
 }
+
+func isFileExpired(fileinfo os.FileInfo, fsize int64) bool {
+	return fileinfo.ModTime().Add(24*time.Hour).Before(time.Now()) && fsize == fileinfo.Size()
+}
