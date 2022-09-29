@@ -872,7 +872,7 @@ func (up *UpYun) resumePut(config *PutObjectConfig, breakpoint *BreakPointConfig
 
 func (up *UpYun) resumeUploadPart(config *PutObjectConfig, breakpoint *BreakPointConfig, f *os.File, fileInfo fs.FileInfo) error {
 	up.Recoder.UploadID = breakpoint.UploadID
-	fsize := fileInfo.Size()
+	fsize := int64(breakpoint.MaxPartID+1) * breakpoint.PartSize
 	maxPartID := breakpoint.MaxPartID
 	partID := breakpoint.PartID
 	curSize, partSize := int64(partID)*breakpoint.PartSize, breakpoint.PartSize
@@ -927,11 +927,11 @@ func (up *UpYun) resumeUploadPart(config *PutObjectConfig, breakpoint *BreakPoin
 		}
 
 		if config.MaxResumePutTries > 0 && try == config.MaxResumePutTries {
-			fragFile, err = newFragmentFile(f, int64(partID+1)*partSize, partSize)
+			partFile, err := newFragmentFile(f, int64(partID+1)*partSize, partSize)
 			if err != nil {
 				return errorOperation("new fragment file", err)
 			}
-			fmd5, err := fileBufMd5(fragFile)
+			fmd5, err := fileBufMd5(partFile)
 			if err != nil {
 				return err
 			}
@@ -939,8 +939,7 @@ func (up *UpYun) resumeUploadPart(config *PutObjectConfig, breakpoint *BreakPoin
 			breakpoint.PartID = id
 			breakpoint.ContentMd5 = fmd5
 
-			up.Recoder.Set(breakpoint)
-			return err
+			return up.Recoder.Set(breakpoint)
 		}
 		curSize += partSize
 	}
