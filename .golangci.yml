@@ -24,7 +24,7 @@ linters:
     - ineffassign
     - interfacer
     - misspell
-    - nakedret
+#    - nakedret
     - nolintlint
     - scopelint
     - staticcheck
