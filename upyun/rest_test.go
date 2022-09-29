@@ -429,11 +429,11 @@ func TestResumePutV2(t *testing.T) {
 
 	defer os.RemoveAll(fname)
 
-	err := up.Put(&PutObjectConfig{
+	_, err := up.ResumePut(&PutObjectConfig{
 		Path:            REST_FILE_1M,
 		LocalPath:       fname,
 		UseMD5:          true,
 		UseResumeUpload: true,
-	})
+	}, nil)
 	Nil(t, err)
 }
