@@ -235,24 +235,11 @@ func parseBodyToFileInfos(b []byte) (iter string, fInfos []*FileInfo, err error)
 	return
 }
 
-func fileBufMd5(f *os.File, partID int, partSize int64) (string, error) {
-	fsize := (int64(partID) + 1) * partSize
-	fileinfo, err := f.Stat()
-	if err != nil {
-		return "", errorOperation("stat", err)
-	}
-
-	if fsize > fileinfo.Size() {
-		fsize = fileinfo.Size()
-	}
-
-	buf := make([]byte, fsize)
-	_, err = f.Read(buf)
-	if err != nil {
-		return "", err
-	}
-	defer func() { f.Seek(0, 0) }()
+func fileBufMd5(f *fragmentFile) (string, error) {
+	buf := make([]byte, f.offset)
+	f.Read(buf)
 	sum := md5.Sum(buf)
+	defer func() { _, _ = f.Seek(0, 0) }()
 	return hex.EncodeToString(sum[:]), nil
 }
 

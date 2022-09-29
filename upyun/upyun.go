@@ -26,6 +26,7 @@ type UpYun struct {
 	UpYunConfig
 	httpc      *http.Client
 	deprecated bool
+	Recoder    *ResumeRecoder
 }
 
 func NewUpYun(config *UpYunConfig) *UpYun {
@@ -58,4 +59,8 @@ func (up *UpYun) SetHTTPClient(httpc *http.Client) {
 
 func (up *UpYun) UseDeprecatedApi() {
 	up.deprecated = true
+}
+
+func (up *UpYun) SetBreakPoint(recoder *ResumeRecoder) {
+	up.Recoder = recoder
 }

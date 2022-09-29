@@ -289,8 +289,7 @@ func (up *UpYun) Put(config *PutObjectConfig) (err error) {
 	}
 
 	if config.UseResumeUpload {
-		_, err = up.resumePut(config, nil)
-		return err
+		return up.resumePut(config, nil)
 	}
 	return up.put(config)
 }
@@ -788,32 +787,36 @@ type BreakPointConfig struct {
 	ContentMd5 string
 }
 
-func (up *UpYun) ResumePut(config *PutObjectConfig, breakPoint *BreakPointConfig) (point *BreakPointConfig, err error) {
+func (up *UpYun) ResumePut(config *PutObjectConfig) (err error) {
 	if config.LocalPath != "" {
 		var fd *os.File
 		if fd, err = os.Open(config.LocalPath); err != nil {
-			return nil, errorOperation("open file", err)
+			return errorOperation("open file", err)
 		}
 		defer fd.Close()
 		config.Reader = fd
 	}
+	breakPoint, err := up.Recoder.Get(up.Recoder.UploadID)
+	if err != nil {
+		return err
+	}
 	return up.resumePut(config, breakPoint)
 }
 
-func (up *UpYun) resumePut(config *PutObjectConfig, breakpoint *BreakPointConfig) (*BreakPointConfig, error) {
+func (up *UpYun) resumePut(config *PutObjectConfig, breakpoint *BreakPointConfig) error {
 	f, ok := config.Reader.(*os.File)
 	if !ok {
-		return nil, errors.New("resumePut: type != *os.File")
+		return errors.New("resumePut: type != *os.File")
 	}
 
 	fileinfo, err := f.Stat()
 	if err != nil {
-		return nil, errorOperation("stat", err)
+		return errorOperation("stat", err)
 	}
 
 	fsize := fileinfo.Size()
 	if fsize < minResumePutFileSize {
-		return nil, up.put(config)
+		return up.put(config)
 	}
 
 	if config.ResumePartSize == 0 {
@@ -836,7 +839,7 @@ func (up *UpYun) resumePut(config *PutObjectConfig, breakpoint *BreakPointConfig
 			OrderUpload:   true,
 		})
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		maxPartID := int((fsize+uploadInfo.PartSize-1)/uploadInfo.PartSize - 1)
@@ -848,9 +851,9 @@ func (up *UpYun) resumePut(config *PutObjectConfig, breakpoint *BreakPointConfig
 		}
 	}
 
-	breakpoint, err = up.resumeUploadPart(config, breakpoint, f, fileinfo)
+	err = up.resumeUploadPart(config, breakpoint, f, fileinfo)
 	if err != nil {
-		return breakpoint, err
+		return err
 	}
 
 	completeConfig := &CompleteMultipartUploadConfig{}
@@ -859,7 +862,7 @@ func (up *UpYun) resumePut(config *PutObjectConfig, breakpoint *BreakPointConfig
 		completeConfig.Md5, _ = md5File(f)
 	}
 
-	return breakpoint, up.CompleteMultipartUpload(
+	return up.CompleteMultipartUpload(
 		&InitMultipartUploadResult{
 			UploadID: breakpoint.UploadID,
 			Path:     config.Path,
@@ -867,28 +870,32 @@ func (up *UpYun) resumePut(config *PutObjectConfig, breakpoint *BreakPointConfig
 		}, completeConfig)
 }
 
-func (up *UpYun) resumeUploadPart(config *PutObjectConfig, breakpoint *BreakPointConfig, f *os.File, fileInfo fs.FileInfo) (*BreakPointConfig, error) {
-
+func (up *UpYun) resumeUploadPart(config *PutObjectConfig, breakpoint *BreakPointConfig, f *os.File, fileInfo fs.FileInfo) error {
+	up.Recoder.UploadID = breakpoint.UploadID
 	fsize := fileInfo.Size()
-	maxPartID := int((fsize+breakpoint.PartSize-1)/breakpoint.PartSize - 1)
+	maxPartID := breakpoint.MaxPartID
 	partID := breakpoint.PartID
 	curSize, partSize := int64(partID)*breakpoint.PartSize, breakpoint.PartSize
 
 	if breakpoint.UseMD5 {
 		if breakpoint.ContentMd5 != "" {
 			// 判断之前上传的文件是否发生了修改
-			fmd5, err := fileBufMd5(f, partID, partSize)
+			partFile, err := newFragmentFile(f, int64(partID+1)*partSize, partSize)
 			if err != nil {
-				return nil, err
+				return errorOperation("new fragment file", err)
+			}
+			fmd5, err := fileBufMd5(partFile)
+			if err != nil {
+				return err
 			}
 			if fmd5 != breakpoint.ContentMd5 {
-				return breakpoint, err
+				return err
 			}
 		}
 	}
 
 	if isFileExpired(fileInfo, fsize) {
-		return nil, errors.New("resume file has expired")
+		return errors.New("resume file has expired")
 	}
 
 	for id := partID; id <= maxPartID; id++ {
@@ -898,7 +905,7 @@ func (up *UpYun) resumeUploadPart(config *PutObjectConfig, breakpoint *BreakPoin
 
 		fragFile, err := newFragmentFile(f, curSize, partSize)
 		if err != nil {
-			return breakpoint, errorOperation("new fragment file", err)
+			return errorOperation("new fragment file", err)
 		}
 
 		try := 0
@@ -920,16 +927,23 @@ func (up *UpYun) resumeUploadPart(config *PutObjectConfig, breakpoint *BreakPoin
 		}
 
 		if config.MaxResumePutTries > 0 && try == config.MaxResumePutTries {
-			breakpoint.PartID = id
-			fmd5, err := fileBufMd5(f, partID, partSize)
+			fragFile, err = newFragmentFile(f, int64(partID+1)*partSize, partSize)
 			if err != nil {
-				return breakpoint, err
+				return errorOperation("new fragment file", err)
 			}
+			fmd5, err := fileBufMd5(fragFile)
+			if err != nil {
+				return err
+			}
+
+			breakpoint.PartID = id
 			breakpoint.ContentMd5 = fmd5
-			return breakpoint, err
+
+			up.Recoder.Set(breakpoint)
+			return err
 		}
 		curSize += partSize
 	}
 
-	return breakpoint, nil
+	return nil
 }

@@ -426,14 +426,15 @@ func TestResumePutV2(t *testing.T) {
 		fd.WriteString(kb)
 	}
 	fd.Close()
-
 	defer os.RemoveAll(fname)
 
-	_, err := up.ResumePut(&PutObjectConfig{
+	recoder := &ResumeRecoder{}
+	up.SetBreakPoint(recoder)
+	err := up.ResumePut(&PutObjectConfig{
 		Path:            REST_FILE_1M,
 		LocalPath:       fname,
 		UseMD5:          true,
 		UseResumeUpload: true,
-	}, nil)
+	})
 	Nil(t, err)
 }
