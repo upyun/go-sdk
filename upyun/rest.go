@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -276,15 +277,16 @@ func getPartInfo(partSize, fsize int64) (int64, int64, error) {
 	}
 	return partSize, partNum, nil
 }
+
 func (up *UpYun) resumePut(config *PutObjectConfig) error {
 	f, ok := config.Reader.(*os.File)
 	if !ok {
-		return errors.New("resumePut: type != *os.File")
+		return errorOperation("type assertion failed", nil)
 	}
 
 	fileinfo, err := f.Stat()
 	if err != nil {
-		return errorOperation("stat", err)
+		return errorOperation("get file info failed", err)
 	}
 
 	fsize := fileinfo.Size()
@@ -295,51 +297,48 @@ func (up *UpYun) resumePut(config *PutObjectConfig) error {
 	if config.ResumePartSize == 0 {
 		config.ResumePartSize = DefaultPartSize
 	}
-	maxPartID := int((fsize+config.ResumePartSize-1)/config.ResumePartSize - 1)
 
 	if config.Headers == nil {
 		config.Headers = make(map[string]string)
 	}
-
-	curSize, partSize := int64(0), config.ResumePartSize
 	headers := config.Headers
-	uploadInfo, err := up.InitMultipartUpload(&InitMultipartUploadConfig{
-		Path:          config.Path,
-		PartSize:      partSize,
-		ContentType:   headers["Content-Type"],
-		ContentLength: fsize,
-		OrderUpload:   true,
-	})
-	if err != nil {
-		return err
+
+	var breakpoint *BreakPointConfig
+	if up.Recorder != nil {
+		breakpoint = up.Recorder.Get(config.Path)
 	}
+	// first upload or file has expired
+	maxPartID := int((fsize+config.ResumePartSize-1)/config.ResumePartSize - 1)
 
-	for id := 0; id <= maxPartID; id++ {
-		if curSize+partSize > fsize {
-			partSize = fsize - curSize
-		}
-		fragFile, err := newFragmentFile(f, curSize, partSize)
+	var uploadInfo *InitMultipartUploadResult
+	if breakpoint == nil || isRecordExpired(fileinfo, breakpoint) {
+		uploadInfo, err = up.InitMultipartUpload(&InitMultipartUploadConfig{
+			Path:          config.Path,
+			PartSize:      config.ResumePartSize,
+			ContentType:   headers["Content-Type"],
+			ContentLength: fsize,
+			OrderUpload:   true,
+		})
 		if err != nil {
-			return errorOperation("new fragment file", err)
-		}
-
-		try := 0
-		for ; config.MaxResumePutTries == 0 || try < config.MaxResumePutTries; try++ {
-			err = up.UploadPart(uploadInfo, &UploadPartConfig{
-				PartID:   id,
-				PartSize: partSize,
-				Reader:   fragFile,
-			})
-			if err == nil {
-				break
-			}
-			fragFile.Seek(0, 0)
-		}
-
-		if config.MaxResumePutTries > 0 && try == config.MaxResumePutTries {
 			return err
 		}
-		curSize += partSize
+
+		breakpoint = &BreakPointConfig{
+			UploadID: uploadInfo.UploadID,
+			PartSize: uploadInfo.PartSize,
+			PartID:   0,
+		}
+
+		if up.Recorder != nil {
+			up.Recorder.Set(config.Path, breakpoint)
+		}
+	}
+	// parID > maxPartID means all part has uploaded
+	if breakpoint.PartID <= maxPartID {
+		breakpoint, err = up.resumeUploadPart(config, breakpoint, f, fileinfo)
+		if err != nil {
+			return err
+		}
 	}
 
 	completeConfig := &CompleteMultipartUploadConfig{}
@@ -347,7 +346,25 @@ func (up *UpYun) resumePut(config *PutObjectConfig) error {
 		f.Seek(0, 0)
 		completeConfig.Md5, _ = md5File(f)
 	}
-	return up.CompleteMultipartUpload(uploadInfo, completeConfig)
+
+	err = up.CompleteMultipartUpload(
+		&InitMultipartUploadResult{
+			UploadID: breakpoint.UploadID,
+			Path:     config.Path,
+			PartSize: breakpoint.PartSize,
+		}, completeConfig)
+	if err != nil {
+		breakpoint.PartID += 1
+		if up.Recorder != nil {
+			up.Recorder.Set(config.Path, breakpoint)
+		}
+		return err
+	}
+
+	if up.Recorder != nil {
+		up.Recorder.Delete(config.Path)
+	}
+	return nil
 }
 
 func (up *UpYun) Put(config *PutObjectConfig) (err error) {
@@ -848,4 +865,63 @@ func (up *UpYun) doRESTRequest(config *restReqConfig) (*http.Response, error) {
 	}
 
 	return resp, nil
+}
+
+type BreakPointConfig struct {
+	UploadID    string
+	PartID      int // 待续传的 PartID
+	PartSize    int64
+	FileSize    int64
+	FileModTime time.Time
+	LastTime    time.Time
+}
+
+func (up *UpYun) resumeUploadPart(config *PutObjectConfig, breakpoint *BreakPointConfig, f *os.File, fileInfo fs.FileInfo) (*BreakPointConfig, error) {
+	fsize := fileInfo.Size()
+	maxPartID := int((fsize+config.ResumePartSize-1)/config.ResumePartSize - 1)
+	partID := breakpoint.PartID
+	curSize, partSize := int64(partID)*breakpoint.PartSize, breakpoint.PartSize
+
+	for id := partID; id <= maxPartID; id++ {
+		if curSize+partSize > fsize {
+			partSize = fsize - curSize
+		}
+		fragFile, err := newFragmentFile(f, curSize, partSize)
+		if err != nil {
+			return breakpoint, errorOperation("new fragment file", err)
+		}
+
+		try := 0
+		for ; config.MaxResumePutTries == 0 || try < config.MaxResumePutTries; try++ {
+			err = up.UploadPart(
+				&InitMultipartUploadResult{
+					UploadID: breakpoint.UploadID,
+					Path:     config.Path,
+					PartSize: breakpoint.PartSize,
+				},
+				&UploadPartConfig{
+					PartID:   id,
+					PartSize: partSize,
+					Reader:   fragFile,
+				})
+			if err == nil {
+				break
+			}
+		}
+
+		if config.MaxResumePutTries > 0 && try == config.MaxResumePutTries {
+			breakpoint.PartID = id
+			breakpoint.FileSize = fsize
+			breakpoint.LastTime = time.Now()
+			breakpoint.FileModTime = fileInfo.ModTime()
+
+			if up.Recorder != nil {
+				up.Recorder.Set(config.Path, breakpoint)
+			}
+			return breakpoint, err
+		}
+		curSize += partSize
+		breakpoint.PartID = id + 1
+	}
+	return breakpoint, nil
 }

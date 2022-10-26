@@ -54,9 +54,11 @@ Table of Contents
             * [CopyObjectConfig](#copyobjectconfig)
             * [FormUploadConfig](#formuploadconfig)
             * [CommitTasksConfig](#committasksconfig)
+            * [BreakPointConfig](#breakpointconfig)
             * [LiveauditCreateTask](#liveauditcreatetask)
             * [LiveauditCancelTask](#liveauditcanceltask)
             * [SyncCommonTask](#synccommontask)
+  
 
 ## Projects using this SDK
 
@@ -85,6 +87,16 @@ func main() {
     fmt.Println(up.Put(&upyun.PutObjectConfig{
         Path:      "/demo.log",
         LocalPath: "/tmp/upload",
+    }))
+
+    // 断点续传 文件大于 10M 才会分片
+    resume := &MemoryRecorder{}
+    // 若设置为 nil，则为正常的分片上传
+    up.SetRecorder(resume)
+    fmt.Println(up.Put(&upyun.PutObjectConfig{
+        Path:      "/demo.log",
+        LocalPath: "/tmp/upload",
+        UseResumeUpload: true,
     }))
 
     // 下载
@@ -419,6 +431,21 @@ type CommitTasksConfig struct {
 
 `CommitTasksConfig` 提供提交异步任务所需的参数。`Accept` 跟 `Source` 仅与异步音视频处理有关。`Tasks` 是一个任务数组，数组中的每一个元素都是任务相关的参数（一般情况下为字典类型）。
 
+
+#### BreakPointConfig
+
+```go
+type BreakPointConfig struct {
+        UploadID    string
+        PartID      int  // 失败待上传的 PartID
+        PartSize    int64
+        FileSize    int64
+        FileModTime time.Time
+        LastTime    time.Time  
+}
+```
+
+`BreakPointConfig` 提供续传所需的参数，在使用 `Put` 进行断点续传时，首先使用 `UpYun` 的`SetRecorder` 传入一个 `Recorder` 接口类型（内部使用 `MemoryRecorder` 实现了该接口），当出现上传失败的时候，调用 `UpYun` 下的 `Recorder` 的 `Get` 方法，即可获取当前断点的相关信息。
 
 #### LiveauditCreateTask
 
