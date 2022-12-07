@@ -249,6 +249,7 @@ func TestResumePut(t *testing.T) {
 	// imitate upload part failed
 	testBreak := 5
 	var curSize int64 = 0
+	var resSize int64 = 0
 	testPoint := &BreakPointConfig{UploadID: result.UploadID, PartSize: result.PartSize,
 		FileSize: fileInfo.Size(), FileModTime: fileInfo.ModTime(), LastTime: now}
 
@@ -262,9 +263,15 @@ func TestResumePut(t *testing.T) {
 			PartID:   i,
 		})
 		Nil(t, err)
+		res, err := up.GetResumeProcess(result.Path)
+		Nil(t, err)
+		Equal(t, int64(i+1), res.NextPartID)
+
 		curSize += DefaultPartSize
 		testPoint.PartID = i + 1
+		resSize += res.NextPartSize
 	}
+	Equal(t, curSize, resSize)
 
 	// other situations
 	tests := []struct {

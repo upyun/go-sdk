@@ -925,3 +925,44 @@ func (up *UpYun) resumeUploadPart(config *PutObjectConfig, breakpoint *BreakPoin
 	}
 	return breakpoint, nil
 }
+
+type ResumePartResult struct {
+	UploadID     string
+	Path         string
+	NextPartSize int64
+	NextPartID   int64
+}
+
+func (up *UpYun) GetResumeProcess(path string) (*ResumePartResult, error) {
+	headers := make(map[string]string)
+
+	headers["X-Upyun-Multi-Info"] = "true"
+	resp, err := up.doRESTRequest(&restReqConfig{
+		headers:   headers,
+		method:    "GET",
+		uri:       path,
+		closeBody: true,
+	})
+	if err != nil {
+		return nil, errorOperation(fmt.Sprintf("get %s", path), err)
+	}
+	partSizeStr := resp.Header.Get("X-Upyun-Next-Part-Size")
+	partIDStr := resp.Header.Get("X-Upyun-Next-Part-Id")
+
+	partSize, err := strconv.ParseInt(partSizeStr, 10, 64)
+	if err != nil {
+		return nil, errorOperation(fmt.Sprintf("GetResumeProcess parse partSizeStr %s", partSizeStr), err)
+	}
+
+	partID, err := strconv.ParseInt(partIDStr, 10, 64)
+	if err != nil {
+		return nil, errorOperation(fmt.Sprintf("GetResumeProcess parse partIDStr %s", partIDStr), err)
+	}
+
+	return &ResumePartResult{
+		UploadID:     resp.Header.Get("X-Upyun-Multi-Uuid"),
+		Path:         path,
+		NextPartSize: partSize,
+		NextPartID:   partID,
+	}, nil
+}
