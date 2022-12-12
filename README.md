@@ -191,7 +191,7 @@ func (up *UpYun) List(config *GetObjectsConfig) error
 #### 获取断点续传进度
 
 ```go
-func (up *UpYun) GetResumeProcess(path string) (*ResumePartResult, error)
+func (up *UpYun) GetResumeProcess(path string) (*ResumeProcessResult, error)
 ```
 
 ---

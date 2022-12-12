@@ -634,3 +634,75 @@ func TestResumeUpload(t *testing.T) {
 	Nil(t, err)
 	Equal(t, fileMd5, pathFileInfo.MD5)
 }
+
+func TestGetDisorderResumeProcess(t *testing.T) {
+	fname := "10M"
+	fd, _ := os.Create(fname)
+	NotNil(t, fd)
+	kb := strings.Repeat("U", 1024)
+	for i := 0; i < minResumePutFileSize/1024+2; i++ {
+		fd.WriteString(kb)
+	}
+	fileInfo, err := fd.Stat()
+	Nil(t, err)
+	defer fd.Close()
+	defer os.RemoveAll(fname)
+
+	path := REST_FILE_1M
+
+	// file config
+	config := &PutObjectConfig{
+		Path:              path,
+		Reader:            fd,
+		LocalPath:         fname,
+		UseMD5:            true,
+		UseResumeUpload:   true,
+		ResumePartSize:    DefaultPartSize,
+		Headers:           make(map[string]string),
+		MaxResumePutTries: 3,
+	}
+
+	// init
+	resume := &MemoryRecorder{}
+	up.SetRecorder(resume)
+	result, err := up.InitMultipartUpload(&InitMultipartUploadConfig{
+		Path:          path,
+		PartSize:      DefaultPartSize,
+		ContentType:   config.Headers["Content-Type"],
+		ContentLength: fileInfo.Size(),
+		OrderUpload:   false,
+	})
+	Nil(t, err)
+
+	// imitate upload part failed
+	testBreak := 10
+	var curSize int64 = 0
+	fileSize := fileInfo.Size()
+
+	// imitate upload some part and failed after testBreak part
+	for i := 0; i <= testBreak; i++ {
+		fragFile, err := newFragmentFile(fd, curSize, DefaultPartSize)
+		Nil(t, err)
+		partSize := int64(DefaultPartSize)
+		res := fileSize - curSize
+		if res < DefaultPartSize {
+			partSize = res
+		}
+		err = up.UploadPart(result, &UploadPartConfig{
+			Reader:   fragFile,
+			PartSize: partSize,
+			PartID:   i,
+		})
+		Nil(t, err)
+
+		curSize += partSize
+	}
+	resp, err := up.GetResumeProcess(result.Path)
+
+	Nil(t, err)
+	Equal(t, testBreak+1, len(resp.Parts))
+	Equal(t, curSize, fileSize)
+	err = up.CompleteMultipartUpload(result, &CompleteMultipartUploadConfig{})
+	Nil(t, err)
+
+}

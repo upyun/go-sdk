@@ -926,43 +926,77 @@ func (up *UpYun) resumeUploadPart(config *PutObjectConfig, breakpoint *BreakPoin
 	return breakpoint, nil
 }
 
-type ResumePartResult struct {
+type DisorderPart struct {
+	ID           int64  `json:"id"`
+	Size         int64  `json:"size"`
+	LastModified int64  `json:"last_modified"`
+	Etag         string `json:"etag"`
+}
+
+type ResumeDisorderResult struct {
+	Parts []*DisorderPart `json:"parts"`
+}
+
+type ResumeProcessResult struct {
 	UploadID     string
 	Path         string
 	NextPartSize int64
 	NextPartID   int64
+	Parts        []*DisorderPart
 }
 
-func (up *UpYun) GetResumeProcess(path string) (*ResumePartResult, error) {
-	headers := make(map[string]string)
+func (up *UpYun) GetResumeProcess(path string) (*ResumeProcessResult, error) {
+	var partID int64
+	var partSize int64
 
+	headers := make(map[string]string)
 	headers["X-Upyun-Multi-Info"] = "true"
 	resp, err := up.doRESTRequest(&restReqConfig{
 		headers:   headers,
 		method:    "GET",
 		uri:       path,
-		closeBody: true,
+		closeBody: false,
 	})
+	defer resp.Body.Close()
 	if err != nil {
 		return nil, errorOperation(fmt.Sprintf("get %s", path), err)
 	}
+
 	partSizeStr := resp.Header.Get("X-Upyun-Next-Part-Size")
 	partIDStr := resp.Header.Get("X-Upyun-Next-Part-Id")
+	uploadID := resp.Header.Get("X-Upyun-Multi-Uuid")
 
-	partSize, err := strconv.ParseInt(partSizeStr, 10, 64)
+	if partSizeStr != "" {
+		partSize, err = strconv.ParseInt(partSizeStr, 10, 64)
+		if err != nil {
+			return nil, errorOperation(fmt.Sprintf("GetResumeProcess parse partSizeStr %s", partSizeStr), err)
+		}
+
+	}
+	if partIDStr != "" {
+		partID, err = strconv.ParseInt(partIDStr, 10, 64)
+		if err != nil {
+			return nil, errorOperation(fmt.Sprintf("GetResumeProcess parse partIDStr %s", partIDStr), err)
+		}
+	}
+	var disorderRes ResumeDisorderResult
+
+	b, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, errorOperation(fmt.Sprintf("GetResumeProcess parse partSizeStr %s", partSizeStr), err)
+		return nil, err
+	}
+	if len(b) != 0 {
+		if err := json.Unmarshal(b, &disorderRes); err != nil {
+			return nil, err
+		}
 	}
 
-	partID, err := strconv.ParseInt(partIDStr, 10, 64)
-	if err != nil {
-		return nil, errorOperation(fmt.Sprintf("GetResumeProcess parse partIDStr %s", partIDStr), err)
-	}
-
-	return &ResumePartResult{
-		UploadID:     resp.Header.Get("X-Upyun-Multi-Uuid"),
-		Path:         path,
+	return &ResumeProcessResult{
+		UploadID:     uploadID,
 		NextPartSize: partSize,
 		NextPartID:   partID,
+		Path:         path,
+		Parts:        disorderRes.Parts,
 	}, nil
+
 }
