@@ -957,10 +957,10 @@ func (up *UpYun) GetResumeProcess(path string) (*ResumeProcessResult, error) {
 		uri:       path,
 		closeBody: false,
 	})
-	defer resp.Body.Close()
 	if err != nil {
 		return nil, errorOperation(fmt.Sprintf("get %s", path), err)
 	}
+	defer resp.Body.Close()
 
 	partSizeStr := resp.Header.Get("X-Upyun-Next-Part-Size")
 	partIDStr := resp.Header.Get("X-Upyun-Next-Part-Id")
@@ -971,7 +971,6 @@ func (up *UpYun) GetResumeProcess(path string) (*ResumeProcessResult, error) {
 		if err != nil {
 			return nil, errorOperation(fmt.Sprintf("GetResumeProcess parse partSizeStr %s", partSizeStr), err)
 		}
-
 	}
 	if partIDStr != "" {
 		partID, err = strconv.ParseInt(partIDStr, 10, 64)
@@ -998,5 +997,4 @@ func (up *UpYun) GetResumeProcess(path string) (*ResumeProcessResult, error) {
 		Path:         path,
 		Parts:        disorderRes.Parts,
 	}, nil
-
 }
