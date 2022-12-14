@@ -68,7 +68,7 @@ func TestPutWithFileReader(t *testing.T) {
 func TestPutWithBuffer(t *testing.T) {
 	s := BUF_CONTENT
 	r := strings.NewReader(s)
-
+	time.Sleep(time.Second)
 	err := up.Put(&PutObjectConfig{
 		Path:   REST_FILE_BUF,
 		Reader: r,
@@ -83,7 +83,7 @@ func TestPutWithBuffer(t *testing.T) {
 func TestCopyMove(t *testing.T) {
 	s := BUF_CONTENT
 	r := strings.NewReader(s)
-
+	time.Sleep(time.Second)
 	srcPath := path.Join(REST_DIR, "src_file")
 	err := up.Put(&PutObjectConfig{
 		Path:   srcPath,
@@ -115,6 +115,7 @@ func TestCopyMove(t *testing.T) {
 		Path: copyPath,
 	})
 	Nil(t, err)
+	time.Sleep(time.Second)
 	err = up.Delete(&DeleteObjectConfig{
 		Path: movePath,
 	})
@@ -197,7 +198,6 @@ func TestMultiGetUpload(t *testing.T) {
 	keyMap[key] = true
 	testMultiUpload(t, key, data10m, partSize, []int{1, 2}, false)
 	key = path.Join(prefixKey, "complete.txt")
-	keyMap[key] = true
 	testMultiUpload(t, key, data10m, partSize, []int{0, 1, 2, 3}, true)
 	result, err := up.ListMultipartUploads(&ListMultipartConfig{
 		Prefix: prefixKey,
@@ -435,6 +435,7 @@ func TestDelete(t *testing.T) {
 	NotNil(t, err)
 
 	for _, obj := range REST_OBJS {
+		time.Sleep(time.Second)
 		err := up.Delete(&DeleteObjectConfig{
 			Path: path.Join(REST_DIR, obj),
 		})
@@ -648,7 +649,7 @@ func TestGetDisorderResumeProcess(t *testing.T) {
 	defer fd.Close()
 	defer os.RemoveAll(fname)
 
-	path := REST_FILE_1M
+	path := "Disorder.txt"
 
 	// file config
 	config := &PutObjectConfig{
@@ -703,6 +704,11 @@ func TestGetDisorderResumeProcess(t *testing.T) {
 	Equal(t, testBreak+1, len(resp.Parts))
 	Equal(t, curSize, fileSize)
 	err = up.CompleteMultipartUpload(result, &CompleteMultipartUploadConfig{})
+	Nil(t, err)
+
+	err = up.Delete(&DeleteObjectConfig{
+		Path: path,
+	})
 	Nil(t, err)
 
 }
