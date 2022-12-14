@@ -471,16 +471,14 @@ func putTestFilesToBucket(t *testing.T, remotePath string) []FileInfo {
 			MD5:   hash,
 		})
 
-		defer func() {
-			err = os.RemoveAll(file)
-			Nil(t, err)
-		}()
-
 		err = up.Put(&PutObjectConfig{
 			Path:      path.Join(remotePath, file),
 			LocalPath: file,
 			UseMD5:    true,
 		})
+		Nil(t, err)
+		fd.Close()
+		err = os.RemoveAll(file)
 		Nil(t, err)
 	}
 	return files
