@@ -68,7 +68,7 @@ func TestPutWithFileReader(t *testing.T) {
 func TestPutWithBuffer(t *testing.T) {
 	s := BUF_CONTENT
 	r := strings.NewReader(s)
-
+	time.Sleep(time.Second)
 	err := up.Put(&PutObjectConfig{
 		Path:   REST_FILE_BUF,
 		Reader: r,
@@ -83,7 +83,7 @@ func TestPutWithBuffer(t *testing.T) {
 func TestCopyMove(t *testing.T) {
 	s := BUF_CONTENT
 	r := strings.NewReader(s)
-
+	time.Sleep(time.Second)
 	srcPath := path.Join(REST_DIR, "src_file")
 	err := up.Put(&PutObjectConfig{
 		Path:   srcPath,
@@ -115,6 +115,7 @@ func TestCopyMove(t *testing.T) {
 		Path: copyPath,
 	})
 	Nil(t, err)
+	time.Sleep(time.Second)
 	err = up.Delete(&DeleteObjectConfig{
 		Path: movePath,
 	})
@@ -197,7 +198,6 @@ func TestMultiGetUpload(t *testing.T) {
 	keyMap[key] = true
 	testMultiUpload(t, key, data10m, partSize, []int{1, 2}, false)
 	key = path.Join(prefixKey, "complete.txt")
-	keyMap[key] = true
 	testMultiUpload(t, key, data10m, partSize, []int{0, 1, 2, 3}, true)
 	result, err := up.ListMultipartUploads(&ListMultipartConfig{
 		Prefix: prefixKey,
@@ -249,6 +249,7 @@ func TestResumePut(t *testing.T) {
 	// imitate upload part failed
 	testBreak := 5
 	var curSize int64 = 0
+	var resSize int64 = 0
 	testPoint := &BreakPointConfig{UploadID: result.UploadID, PartSize: result.PartSize,
 		FileSize: fileInfo.Size(), FileModTime: fileInfo.ModTime(), LastTime: now}
 
@@ -262,9 +263,15 @@ func TestResumePut(t *testing.T) {
 			PartID:   i,
 		})
 		Nil(t, err)
+		res, err := up.GetResumeProcess(result.Path)
+		Nil(t, err)
+		Equal(t, int64(i+1), res.NextPartID)
+
 		curSize += DefaultPartSize
 		testPoint.PartID = i + 1
+		resSize += res.NextPartSize
 	}
+	Equal(t, curSize, resSize)
 
 	// other situations
 	tests := []struct {
@@ -428,6 +435,7 @@ func TestDelete(t *testing.T) {
 	NotNil(t, err)
 
 	for _, obj := range REST_OBJS {
+		time.Sleep(time.Second)
 		err := up.Delete(&DeleteObjectConfig{
 			Path: path.Join(REST_DIR, obj),
 		})
@@ -463,16 +471,14 @@ func putTestFilesToBucket(t *testing.T, remotePath string) []FileInfo {
 			MD5:   hash,
 		})
 
-		defer func() {
-			err = os.RemoveAll(file)
-			Nil(t, err)
-		}()
-
 		err = up.Put(&PutObjectConfig{
 			Path:      path.Join(remotePath, file),
 			LocalPath: file,
 			UseMD5:    true,
 		})
+		Nil(t, err)
+		fd.Close()
+		err = os.RemoveAll(file)
 		Nil(t, err)
 	}
 	return files
@@ -626,4 +632,81 @@ func TestResumeUpload(t *testing.T) {
 	pathFileInfo, err := up.GetInfo(path)
 	Nil(t, err)
 	Equal(t, fileMd5, pathFileInfo.MD5)
+}
+
+func TestGetDisorderResumeProcess(t *testing.T) {
+	fname := "10M"
+	fd, _ := os.Create(fname)
+	NotNil(t, fd)
+	kb := strings.Repeat("U", 1024)
+	for i := 0; i < minResumePutFileSize/1024+2; i++ {
+		fd.WriteString(kb)
+	}
+	fileInfo, err := fd.Stat()
+	Nil(t, err)
+	defer fd.Close()
+	defer os.RemoveAll(fname)
+
+	path := "Disorder.txt"
+
+	// file config
+	config := &PutObjectConfig{
+		Path:              path,
+		Reader:            fd,
+		LocalPath:         fname,
+		UseMD5:            true,
+		UseResumeUpload:   true,
+		ResumePartSize:    DefaultPartSize,
+		Headers:           make(map[string]string),
+		MaxResumePutTries: 3,
+	}
+
+	// init
+	resume := &MemoryRecorder{}
+	up.SetRecorder(resume)
+	result, err := up.InitMultipartUpload(&InitMultipartUploadConfig{
+		Path:          path,
+		PartSize:      DefaultPartSize,
+		ContentType:   config.Headers["Content-Type"],
+		ContentLength: fileInfo.Size(),
+		OrderUpload:   false,
+	})
+	Nil(t, err)
+
+	// imitate upload part failed
+	testBreak := 10
+	var curSize int64 = 0
+	fileSize := fileInfo.Size()
+
+	// imitate upload some part and failed after testBreak part
+	for i := 0; i <= testBreak; i++ {
+		fragFile, err := newFragmentFile(fd, curSize, DefaultPartSize)
+		Nil(t, err)
+		partSize := int64(DefaultPartSize)
+		res := fileSize - curSize
+		if res < DefaultPartSize {
+			partSize = res
+		}
+		err = up.UploadPart(result, &UploadPartConfig{
+			Reader:   fragFile,
+			PartSize: partSize,
+			PartID:   i,
+		})
+		Nil(t, err)
+
+		curSize += partSize
+	}
+	resp, err := up.GetResumeProcess(result.Path)
+
+	Nil(t, err)
+	Equal(t, testBreak+1, len(resp.Parts))
+	Equal(t, curSize, fileSize)
+	err = up.CompleteMultipartUpload(result, &CompleteMultipartUploadConfig{})
+	Nil(t, err)
+
+	err = up.Delete(&DeleteObjectConfig{
+		Path: path,
+	})
+	Nil(t, err)
+
 }

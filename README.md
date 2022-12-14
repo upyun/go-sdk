@@ -35,6 +35,7 @@ Table of Contents
             * [复制](#复制)
             * [获取文件信息](#获取文件信息)
             * [获取文件列表](#获取文件列表)
+            * [获取断点续传进度](#获取断点续传进度)
          * [又拍云缓存刷新接口](#又拍云缓存刷新接口)
          * [又拍云表单上传接口](#又拍云表单上传接口)
          * [又拍云处理接口](#又拍云处理接口)
@@ -185,6 +186,12 @@ func (up *UpYun) GetInfo(path string) (*FileInfo, error)
 
 ```go
 func (up *UpYun) List(config *GetObjectsConfig) error
+```
+
+#### 获取断点续传进度
+
+```go
+func (up *UpYun) GetResumeProcess(path string) (*ResumeProcessResult, error)
 ```
 
 ---
