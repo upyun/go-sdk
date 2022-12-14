@@ -2,7 +2,11 @@ name: test
 on:
   pull_request_target:
     types: [labeled]
+    paths-ignore:
+      - "**.md"
   push:
+    paths-ignore:
+      - "**.md"
 
 jobs:
   build:
