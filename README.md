@@ -63,7 +63,7 @@ Table of Contents
 
 ## Projects using this SDK
 
-- [又拍云命令行工具](https://github.com/polym/upx) by [polym](https://github.com/polym)
+- [又拍云命令行工具](https://github.com/upyun/upx) by [polym](https://github.com/polym)
 
 ## Usage
 
