@@ -1,6 +1,7 @@
 name: test
 on:
-  pull_request:
+  pull_request_target:
+    types: [labeled]
   push:
 
 jobs:
@@ -10,8 +11,6 @@ jobs:
         go-version: [^1]
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-#    if: contains(github.event.pull_request.labels.*.name, 'ok to test')
-#    environment: RELEASE
     env:
       GO111MODULE: "on"
       UPYUN_BUCKET: ${{ secrets.UPYUN_BUCKET }}
