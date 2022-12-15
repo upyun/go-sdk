@@ -2,6 +2,7 @@ package upyun
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -79,4 +80,22 @@ func (up *UpYun) doGetEndpoint(host string) string {
 		return s
 	}
 	return host
+}
+
+func (up *UpYun) getEndpoint(defaultHost string) string {
+	value := up.Hosts["host"]
+	if value == "" {
+		value = defaultHost
+	}
+	s := strings.TrimSpace(value)
+	s = strings.TrimPrefix(s, "http://")
+	s = strings.TrimPrefix(s, "https://")
+	if s == "" {
+		s = defaultHost
+	}
+	scheme := "https://"
+	if up.UseHTTP {
+		scheme = "http://"
+	}
+	return fmt.Sprintf("%s%s", scheme, s)
 }

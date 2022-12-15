@@ -20,6 +20,7 @@ type UpYunConfig struct {
 	Secret    string // deprecated
 	Hosts     map[string]string
 	UserAgent string
+	UseHTTP   bool
 }
 
 type UpYun struct {

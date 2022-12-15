@@ -253,6 +253,7 @@ type UpYunConfig struct {
         Secret    string                // 表单上传密钥，已经弃用！
         Hosts     map[string]string     // 自定义 Hosts 映射关系
         UserAgent string                // HTTP User-Agent 头，默认 "UPYUN Go SDK V2"
+        UseHTTP   bool                  // 默认使用https，若要使用http，则该字段值为true
 }
 ```
 

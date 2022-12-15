@@ -84,8 +84,8 @@ func (up *UpYun) FormUpload(config *FormUploadConfig) (*FormUploadResp, error) {
 		formValues["authorization"] = up.MakeUnifiedAuth(sign)
 	}
 
-	endpoint := up.doGetEndpoint("v0.api.upyun.com")
-	url := fmt.Sprintf("http://%s/%s", endpoint, up.Bucket)
+	endpoint := up.getEndpoint("v0.api.upyun.com")
+	url := fmt.Sprintf("%s/%s", endpoint, up.Bucket)
 	resp, err := up.doFormRequest(url, formValues)
 	if err != nil {
 		return nil, err
