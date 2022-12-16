@@ -851,8 +851,8 @@ func (up *UpYun) doRESTRequest(config *restReqConfig) (*http.Response, error) {
 		})
 	}
 
-	endpoint := up.doGetEndpoint("v0.api.upyun.com")
-	url := fmt.Sprintf("http://%s%s", endpoint, escUri)
+	endpoint := up.getEndpoint("v0.api.upyun.com")
+	url := fmt.Sprintf("%s%s", endpoint, escUri)
 
 	resp, err := up.doHTTPRequest(config.method, url, headers, config.httpBody)
 	if err != nil {
