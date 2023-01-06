@@ -38,6 +38,7 @@ func NewUpYun(config *UpYunConfig) *UpYun {
 	up.Password = md5Str(config.Password)
 	up.Secret = config.Secret
 	up.Hosts = config.Hosts
+	up.UseHTTP = config.UseHTTP
 	if config.UserAgent != "" {
 		up.UserAgent = config.UserAgent
 	} else {
