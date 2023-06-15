@@ -25,12 +25,12 @@ type FileInfo struct {
 }
 
 /*
-  Content-Type: image/gif
-  ETag: "dc9ea7257aa6da18e74505259b04a946"
-  x-upyun-file-type: GIF
-  x-upyun-height: 379
-  x-upyun-width: 500
-  x-upyun-frames: 90
+Content-Type: image/gif
+ETag: "dc9ea7257aa6da18e74505259b04a946"
+x-upyun-file-type: GIF
+x-upyun-height: 379
+x-upyun-width: 500
+x-upyun-frames: 90
 */
 func parseHeaderToFileInfo(header http.Header, getinfo bool) *FileInfo {
 	fInfo := &FileInfo{}

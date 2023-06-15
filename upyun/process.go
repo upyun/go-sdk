@@ -53,7 +53,6 @@ func (up *UpYun) CommitTasks(config *CommitTasksConfig) (taskIds []string, err e
 	if config.Accept != "" {
 		kwargs["accept"] = config.Accept
 	}
-
 	err = up.doProcessRequest("POST", "/pretreatment/", kwargs, &taskIds)
 	return
 }

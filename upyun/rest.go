@@ -1,12 +1,12 @@
 package upyun
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -19,6 +19,7 @@ import (
 
 const (
 	DefaultPartSize      = 1024 * 1024
+	MaxPartSize          = 1024 * 1024 * 50
 	MaxPartNum           = 10000
 	minResumePutFileSize = 10 * 1024 * 1024
 	MaxListTries         = 5
@@ -81,16 +82,38 @@ type GetRequestConfig struct {
 
 // PutObjectConfig provides a configuration to Put method.
 type PutObjectConfig struct {
-	Path            string
-	LocalPath       string
-	Reader          io.Reader
-	Headers         map[string]string
-	UseMD5          bool
+	Path      string
+	LocalPath string
+	Reader    io.Reader
+	Headers   map[string]string
+	UseMD5    bool
+
+	// Deprecated: 使用 MultipartUpload 替代 UseResumeUpload
 	UseResumeUpload bool
-	// Append Api Deprecated
-	// AppendContent     bool
-	ResumePartSize    int64
+
+	// Deprecated: 不再生效 PutObjectConfig 不再提供可配置的分片大小
+	ResumePartSize int64
+
+	// 分片大小
+	partSize int64
+
+	// Deprecated: 不再生效 PutObjectConfig 不再提供可配置的重试次数
 	MaxResumePutTries int
+
+	// 开启自动分片上传，
+	MultipartUpload bool
+
+	// 分片上传的线程数，只有开启断续上传时，才有效
+	MultipartUploadWorkers int
+
+	// 分片上传时，开启断点续传
+	MultipartUploadCheckpoint bool
+
+	// 分片上传进度变化时 会被调用
+	// fsize  总文件大小
+	// offset 恢复上传后取得的不需要重复上传的大小
+	// increase 本轮上传成功的分片大小
+	OnProgress func(fsize, offset, increase int64)
 }
 
 type MoveObjectConfig struct {
@@ -278,7 +301,62 @@ func getPartInfo(partSize, fsize int64) (int64, int64, error) {
 	return partSize, partNum, nil
 }
 
-func (up *UpYun) resumePut(config *PutObjectConfig) error {
+// 通过文件大小 自动获取分片大小, 按1% 与 1M 取整
+func getPartSize(fsize int64) int64 {
+	size := (fsize / 100 / DefaultPartSize) * DefaultPartSize
+	return min(max(DefaultPartSize, size), MaxPartSize)
+}
+
+func (up *UpYun) getMultipartUploadProcess(config *PutObjectConfig, fsize int64) (*ResumeProcessResult, error) {
+	initMultipartUploadConfig := &InitMultipartUploadConfig{
+		Path:          config.Path,
+		ContentLength: fsize,
+		PartSize:      config.partSize,
+		ContentType:   config.Headers["Content-Type"],
+		OrderUpload:   config.MultipartUploadWorkers == 1,
+	}
+
+	// 1. 不启用断续上传, 则重新创建一个分片上传任务
+	if !config.MultipartUploadCheckpoint {
+		initMultipartUploadResult, err := up.InitMultipartUpload(initMultipartUploadConfig)
+		if err != nil {
+			return nil, err
+		}
+		return &ResumeProcessResult{
+			UploadID:     initMultipartUploadResult.UploadID,
+			Path:         initMultipartUploadConfig.Path,
+			NextPartID:   0,
+			NextPartSize: config.partSize,
+			Parts:        make([]*DisorderPart, 0),
+		}, nil
+	}
+
+	// 2. 启动断续上传
+
+	// 获取曾经的上传进度
+	resumeProcessResult, err := up.GetResumeProcess(config.Path)
+
+	// 如果不存在已经上传的进度则创建新的上传任务
+	if resumeProcessResult == nil || err != nil {
+		initMultipartUploadResult, err := up.InitMultipartUpload(initMultipartUploadConfig)
+		if err != nil {
+			return nil, err
+		}
+		return &ResumeProcessResult{
+			UploadID:     initMultipartUploadResult.UploadID,
+			Path:         initMultipartUploadConfig.Path,
+			NextPartID:   0,
+			NextPartSize: config.partSize,
+			Parts:        make([]*DisorderPart, 0),
+		}, nil
+	}
+
+	return resumeProcessResult, nil
+}
+
+// 自动的分片上传，支持多线程上传、断点续传
+// 如果要使用底层能力请使用 InitMultipartUpload, CompleteMultipartUpload, UploadPart
+func (up *UpYun) multipartUpload(config *PutObjectConfig) error {
 	f, ok := config.Reader.(*os.File)
 	if !ok {
 		return errorOperation("type assertion failed", nil)
@@ -294,80 +372,92 @@ func (up *UpYun) resumePut(config *PutObjectConfig) error {
 		return up.put(config)
 	}
 
-	if config.ResumePartSize == 0 {
-		config.ResumePartSize = DefaultPartSize
-	}
-
 	if config.Headers == nil {
 		config.Headers = make(map[string]string)
 	}
-	headers := config.Headers
-
-	var breakpoint *BreakPointConfig
-	if up.Recorder != nil {
-		breakpoint = up.Recorder.Get(config.Path)
+	if config.partSize == 0 {
+		config.partSize = getPartSize(fsize)
 	}
-	// first upload or file has expired
-	maxPartID := int((fsize+config.ResumePartSize-1)/config.ResumePartSize - 1)
 
-	var uploadInfo *InitMultipartUploadResult
-	if breakpoint == nil || isRecordExpired(fileinfo, breakpoint) {
-		uploadInfo, err = up.InitMultipartUpload(&InitMultipartUploadConfig{
-			Path:          config.Path,
-			PartSize:      config.ResumePartSize,
-			ContentType:   headers["Content-Type"],
-			ContentLength: fsize,
-			OrderUpload:   true,
-		})
-		if err != nil {
-			return err
-		}
-
-		breakpoint = &BreakPointConfig{
-			UploadID: uploadInfo.UploadID,
-			PartSize: uploadInfo.PartSize,
-			PartID:   0,
-		}
-
-		if up.Recorder != nil {
-			up.Recorder.Set(config.Path, breakpoint)
-		}
+	// 获取上一次的上传进度
+	resumeProcess, err := up.getMultipartUploadProcess(config, fsize)
+	if err != nil {
+		return errorOperation("get resume process failed", err)
 	}
-	// parID > maxPartID means all part has uploaded
-	if breakpoint.PartID <= maxPartID {
-		breakpoint, err = up.resumeUploadPart(config, breakpoint, f, fileinfo)
-		if err != nil {
-			return err
+	initMultipartUploadResult := &InitMultipartUploadResult{
+		UploadID: resumeProcess.UploadID,
+		Path:     resumeProcess.Path,
+		PartSize: config.partSize,
+	}
+
+	// 恢复之前的上传进度
+	var offset int64
+	if resumeProcess.Parts != nil {
+		for _, part := range resumeProcess.Parts {
+			offset += part.Size
 		}
 	}
 
+	// 上传分片
+	uploader := createMultipartUploader(
+		f,
+		config,
+		createSkiper(
+			resumeProcess.NextPartID,
+			resumeProcess.Parts,
+		),
+		initMultipartUploadResult.PartSize,
+	)
+
+	err = uploader.Go(func(id int, data []byte) error {
+		var err error
+		for i := 0; i < 3; i++ {
+			err = up.UploadPart(initMultipartUploadResult, &UploadPartConfig{
+				PartID:   id,
+				Reader:   bytes.NewReader(data),
+				PartSize: int64(len(data)),
+			})
+
+			// 上传成功或重复上传错误 正常退出
+			if err == nil || (err != nil && IsDuplicatePart(err)) {
+				if config.OnProgress != nil {
+					config.OnProgress(fsize, offset, int64(len(data)))
+				}
+				return nil
+			}
+		}
+		return err
+	})
+
+	if err != nil {
+		return err
+	}
+
+	// 完成上传
 	completeConfig := &CompleteMultipartUploadConfig{}
-	if config.UseMD5 {
+	if config.UseMD5 && config.MultipartUploadWorkers <= 1 {
 		f.Seek(0, 0)
 		completeConfig.Md5, _ = md5File(f)
 	}
 
-	err = up.CompleteMultipartUpload(
-		&InitMultipartUploadResult{
-			UploadID: breakpoint.UploadID,
-			Path:     config.Path,
-			PartSize: breakpoint.PartSize,
-		}, completeConfig)
-	if err != nil {
-		breakpoint.PartID += 1
-		if up.Recorder != nil {
-			up.Recorder.Set(config.Path, breakpoint)
-		}
-		return err
-	}
-
-	if up.Recorder != nil {
-		up.Recorder.Delete(config.Path)
-	}
-	return nil
+	return up.CompleteMultipartUpload(
+		initMultipartUploadResult,
+		completeConfig,
+	)
 }
 
 func (up *UpYun) Put(config *PutObjectConfig) (err error) {
+	// 开启 MD5 时， 无法使用并发上传
+	if config.UseMD5 && config.MultipartUploadWorkers > 1 {
+		config.MultipartUploadWorkers = 1
+	}
+
+	// 兼容配置名称
+	if config.UseResumeUpload {
+		config.MultipartUpload = true
+		config.MultipartUploadCheckpoint = true
+	}
+
 	if config.LocalPath != "" {
 		var fd *os.File
 		if fd, err = os.Open(config.LocalPath); err != nil {
@@ -377,8 +467,11 @@ func (up *UpYun) Put(config *PutObjectConfig) (err error) {
 		config.Reader = fd
 	}
 
-	if config.UseResumeUpload {
-		return up.resumePut(config)
+	if config.MultipartUpload {
+		if config.MultipartUploadWorkers <= 0 {
+			config.MultipartUploadWorkers = 1
+		}
+		return up.multipartUpload(config)
 	}
 	return up.put(config)
 }
@@ -430,6 +523,7 @@ func (up *UpYun) InitMultipartUpload(config *InitMultipartUploadConfig) (*InitMu
 		headers["X-Upyun-Multi-Length"] = strconv.FormatInt(config.ContentLength, 10)
 	}
 	headers["X-Upyun-Multi-Stage"] = "initiate"
+
 	if !config.OrderUpload {
 		headers["X-Upyun-Multi-Disorder"] = "true"
 	}
@@ -865,65 +959,6 @@ func (up *UpYun) doRESTRequest(config *restReqConfig) (*http.Response, error) {
 	}
 
 	return resp, nil
-}
-
-type BreakPointConfig struct {
-	UploadID    string
-	PartID      int // 待续传的 PartID
-	PartSize    int64
-	FileSize    int64
-	FileModTime time.Time
-	LastTime    time.Time
-}
-
-func (up *UpYun) resumeUploadPart(config *PutObjectConfig, breakpoint *BreakPointConfig, f *os.File, fileInfo fs.FileInfo) (*BreakPointConfig, error) {
-	fsize := fileInfo.Size()
-	maxPartID := int((fsize+config.ResumePartSize-1)/config.ResumePartSize - 1)
-	partID := breakpoint.PartID
-	curSize, partSize := int64(partID)*breakpoint.PartSize, breakpoint.PartSize
-
-	for id := partID; id <= maxPartID; id++ {
-		if curSize+partSize > fsize {
-			partSize = fsize - curSize
-		}
-		fragFile, err := newFragmentFile(f, curSize, partSize)
-		if err != nil {
-			return breakpoint, errorOperation("new fragment file", err)
-		}
-
-		try := 0
-		for ; config.MaxResumePutTries == 0 || try < config.MaxResumePutTries; try++ {
-			err = up.UploadPart(
-				&InitMultipartUploadResult{
-					UploadID: breakpoint.UploadID,
-					Path:     config.Path,
-					PartSize: breakpoint.PartSize,
-				},
-				&UploadPartConfig{
-					PartID:   id,
-					PartSize: partSize,
-					Reader:   fragFile,
-				})
-			if err == nil {
-				break
-			}
-		}
-
-		if config.MaxResumePutTries > 0 && try == config.MaxResumePutTries {
-			breakpoint.PartID = id
-			breakpoint.FileSize = fsize
-			breakpoint.LastTime = time.Now()
-			breakpoint.FileModTime = fileInfo.ModTime()
-
-			if up.Recorder != nil {
-				up.Recorder.Set(config.Path, breakpoint)
-			}
-			return breakpoint, err
-		}
-		curSize += partSize
-		breakpoint.PartID = id + 1
-	}
-	return breakpoint, nil
 }
 
 type DisorderPart struct {

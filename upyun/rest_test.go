@@ -123,26 +123,26 @@ func TestCopyMove(t *testing.T) {
 }
 
 /*
-func TestPutWithBufferAppend(t *testing.T) {
-	s := BUF_CONTENT
-	for k := 0; k < 3; k++ {
-		r := strings.NewReader(s)
-		err := up.Put(&PutObjectConfig{
-			Path:   REST_FILE_BUF_BUF,
-			Reader: r,
-			Headers: map[string]string{
-				"Content-Length": fmt.Sprint(len(s)),
-			},
-			AppendContent: true,
-			UseMD5:        true,
-		})
-		if k != 0 {
-			NotNil(t, err)
-		} else {
-			Nil(t, err)
+	func TestPutWithBufferAppend(t *testing.T) {
+		s := BUF_CONTENT
+		for k := 0; k < 3; k++ {
+			r := strings.NewReader(s)
+			err := up.Put(&PutObjectConfig{
+				Path:   REST_FILE_BUF_BUF,
+				Reader: r,
+				Headers: map[string]string{
+					"Content-Length": fmt.Sprint(len(s)),
+				},
+				AppendContent: true,
+				UseMD5:        true,
+			})
+			if k != 0 {
+				NotNil(t, err)
+			} else {
+				Nil(t, err)
+			}
 		}
 	}
-}
 */
 func testMultiUpload(t *testing.T, key string, data []byte, partSize int64, parts []int, completed bool) *InitMultipartUploadResult {
 	uploadResult, err := up.InitMultipartUpload(&InitMultipartUploadConfig{
@@ -206,7 +206,8 @@ func TestMultiGetUpload(t *testing.T) {
 
 	Equal(t, len(result.Files), len(keyMap))
 }
-func TestResumePut(t *testing.T) {
+
+func TestMultipartUpload(t *testing.T) {
 	fname := "10M"
 	fd, _ := os.Create(fname)
 	NotNil(t, fd)
@@ -214,124 +215,22 @@ func TestResumePut(t *testing.T) {
 	for i := 0; i < (minResumePutFileSize/1024 + 2); i++ {
 		fd.WriteString(kb)
 	}
-	fileInfo, err := fd.Stat()
-	Nil(t, err)
-	defer fd.Close()
+
 	defer os.RemoveAll(fname)
+	defer fd.Close()
 
-	now := time.Now()
 	path := REST_FILE_1M
-
-	// file config
 	config := &PutObjectConfig{
-		Path:              path,
-		Reader:            fd,
-		LocalPath:         fname,
-		UseMD5:            true,
-		UseResumeUpload:   true,
-		ResumePartSize:    DefaultPartSize,
-		Headers:           make(map[string]string),
-		MaxResumePutTries: 3,
+		Path:                   path,
+		Reader:                 fd,
+		LocalPath:              fname,
+		UseMD5:                 true,
+		Headers:                make(map[string]string),
+		MultipartUpload:        true,
+		MultipartUploadWorkers: 2,
 	}
-
-	// init
-	resume := &MemoryRecorder{}
-	up.SetRecorder(resume)
-	result, err := up.InitMultipartUpload(&InitMultipartUploadConfig{
-		Path:          path,
-		PartSize:      DefaultPartSize,
-		ContentType:   config.Headers["Content-Type"],
-		ContentLength: fileInfo.Size(),
-		OrderUpload:   true,
-	})
+	err := up.Put(config)
 	Nil(t, err)
-
-	// imitate upload part failed
-	testBreak := 5
-	var curSize int64 = 0
-	var resSize int64 = 0
-	testPoint := &BreakPointConfig{UploadID: result.UploadID, PartSize: result.PartSize,
-		FileSize: fileInfo.Size(), FileModTime: fileInfo.ModTime(), LastTime: now}
-
-	// imitate upload some part and failed after testBreak part
-	for i := 0; i <= testBreak; i++ {
-		fragFile, err := newFragmentFile(fd, curSize, DefaultPartSize)
-		Nil(t, err)
-		err = up.UploadPart(result, &UploadPartConfig{
-			Reader:   fragFile,
-			PartSize: DefaultPartSize,
-			PartID:   i,
-		})
-		Nil(t, err)
-		res, err := up.GetResumeProcess(result.Path)
-		Nil(t, err)
-		Equal(t, int64(i+1), res.NextPartID)
-
-		curSize += DefaultPartSize
-		testPoint.PartID = i + 1
-		resSize += res.NextPartSize
-	}
-	Equal(t, curSize, resSize)
-
-	// other situations
-	tests := []struct {
-		BreakPointConfig
-	}{
-		// imitate breakPoint has expired
-		{
-			BreakPointConfig{
-				UploadID: result.UploadID, PartID: testBreak + 1, PartSize: result.PartSize,
-				FileSize: fileInfo.Size(), FileModTime: fileInfo.ModTime(), LastTime: now.AddDate(0, 0, -2),
-			},
-		},
-		// imitate file updated
-		{
-			BreakPointConfig{
-				UploadID: result.UploadID, PartID: testBreak + 1, PartSize: result.PartSize,
-				FileSize: fileInfo.Size() + 100, FileModTime: fileInfo.ModTime(), LastTime: now,
-			},
-		},
-	}
-
-	for _, test := range tests {
-		testPath := "/go-sdk/" + time.Now().String()
-		config.Path = testPath
-		point := test.BreakPointConfig
-
-		resume.Set(path, &point)
-		err = up.resumePut(config)
-		Nil(t, err)
-
-		// expect result
-		var nilPoint *BreakPointConfig
-		Equal(t, resume.Get(testPath), nilPoint)
-
-		// compare md5
-		fileMd5, err := md5File(fd)
-		Nil(t, err)
-
-		pathFileInfo, err := up.GetInfo(testPath)
-		Nil(t, err)
-		Equal(t, fileMd5, pathFileInfo.MD5)
-	}
-
-	// resumePut
-	config.Path = path
-	resume.Set(path, testPoint)
-	err = up.resumePut(config)
-	Nil(t, err)
-
-	// upload success
-	var nilPoint *BreakPointConfig
-	Equal(t, resume.Get(path), nilPoint)
-
-	// compare md5
-	fileMd5, err := md5File(fd)
-	Nil(t, err)
-
-	pathFileInfo, err := up.GetInfo(path)
-	Nil(t, err)
-	Equal(t, fileMd5, pathFileInfo.MD5)
 }
 
 func TestGetWithWriter(t *testing.T) {
@@ -400,7 +299,6 @@ func TestList(t *testing.T) {
 	for fInfo := range ch {
 		files = append(files, fInfo.Name)
 	}
-
 	Equal(t, len(files), len(REST_OBJS))
 	sort.Strings(files)
 	sort.Strings(REST_OBJS)
@@ -523,117 +421,6 @@ func TestListObjects(t *testing.T) {
 
 }
 
-func TestResumeUpload(t *testing.T) {
-	fname := "10M"
-	fd, _ := os.Create(fname)
-	NotNil(t, fd)
-	kb := strings.Repeat("U", 1024)
-	for i := 0; i < (minResumePutFileSize/1024 + 2); i++ {
-		fd.WriteString(kb)
-	}
-
-	fileInfo, err := fd.Stat()
-	Nil(t, err)
-	defer os.RemoveAll(fname)
-	defer fd.Close()
-
-	path := REST_FILE_1M
-	config := &PutObjectConfig{
-		Path:              path,
-		Reader:            fd,
-		LocalPath:         fname,
-		UseMD5:            true,
-		UseResumeUpload:   true,
-		ResumePartSize:    DefaultPartSize,
-		Headers:           make(map[string]string),
-		MaxResumePutTries: 3,
-	}
-
-	// init
-	resume := &MemoryRecorder{}
-	up.SetRecorder(resume)
-	result, err := up.InitMultipartUpload(&InitMultipartUploadConfig{
-		Path:          path,
-		PartSize:      DefaultPartSize,
-		ContentType:   config.Headers["Content-Type"],
-		ContentLength: fileInfo.Size(),
-		OrderUpload:   true,
-	})
-	Nil(t, err)
-
-	// build resumeRecorder
-	maxPartID := int((fileInfo.Size()+result.PartSize-1)/result.PartSize - 1)
-	now := time.Now()
-
-	// imitate break part
-	testBreak := 5
-
-	var curSize int64 = 0
-	testPoint := &BreakPointConfig{UploadID: result.UploadID}
-	for i := 0; i <= testBreak; i++ {
-		fragFile, err := newFragmentFile(fd, curSize, DefaultPartSize)
-		Nil(t, err)
-		err = up.UploadPart(result, &UploadPartConfig{
-			Reader:   fragFile,
-			PartSize: DefaultPartSize,
-			PartID:   i,
-		})
-		Nil(t, err)
-		curSize += DefaultPartSize
-		testPoint.PartID = i + 1
-	}
-	tests := []struct {
-		BreakPointConfig
-		expected BreakPointConfig
-	}{
-		// imitate failed in upload part stage
-		{
-			BreakPointConfig{
-				UploadID: result.UploadID, PartID: testBreak + 1, PartSize: result.PartSize,
-				FileSize: fileInfo.Size(), FileModTime: fileInfo.ModTime(), LastTime: now,
-			},
-			BreakPointConfig{
-				UploadID: result.UploadID, PartID: maxPartID + 1, PartSize: result.PartSize,
-				FileSize: fileInfo.Size(), FileModTime: fileInfo.ModTime(), LastTime: now,
-			},
-		},
-		// imitate failed in complete stage
-		{
-			BreakPointConfig{
-				UploadID: testPoint.UploadID, PartID: maxPartID + 1, PartSize: result.PartSize,
-				FileSize: fileInfo.Size(), FileModTime: fileInfo.ModTime(), LastTime: now,
-			},
-			BreakPointConfig{
-				UploadID: testPoint.UploadID, PartID: maxPartID + 1, PartSize: result.PartSize,
-				FileSize: fileInfo.Size(), FileModTime: fileInfo.ModTime(), LastTime: now,
-			},
-		},
-	}
-
-	// imitate breakPoint
-	for _, test := range tests {
-		point := test.BreakPointConfig
-		// resume upload
-		_, err = up.resumeUploadPart(config, &point, fd, fileInfo)
-		Nil(t, err)
-		Equal(t, point, test.expected)
-
-		resume.Set(path, &point)
-		Equal(t, resume.Get(path), &test.expected)
-
-	}
-	// complete
-	err = up.CompleteMultipartUpload(result, &CompleteMultipartUploadConfig{})
-	Nil(t, err)
-
-	// compare md5
-	fileMd5, err := md5File(fd)
-	Nil(t, err)
-	pathFileInfo, err := up.GetInfo(path)
-	Nil(t, err)
-	Equal(t, fileMd5, pathFileInfo.MD5)
-}
-
 func TestGetDisorderResumeProcess(t *testing.T) {
 	fname := "10M"
 	fd, _ := os.Create(fname)
@@ -651,19 +438,15 @@ func TestGetDisorderResumeProcess(t *testing.T) {
 
 	// file config
 	config := &PutObjectConfig{
-		Path:              path,
-		Reader:            fd,
-		LocalPath:         fname,
-		UseMD5:            true,
-		UseResumeUpload:   true,
-		ResumePartSize:    DefaultPartSize,
-		Headers:           make(map[string]string),
-		MaxResumePutTries: 3,
+		Path:            path,
+		Reader:          fd,
+		LocalPath:       fname,
+		UseMD5:          true,
+		UseResumeUpload: true,
+		Headers:         make(map[string]string),
 	}
 
 	// init
-	resume := &MemoryRecorder{}
-	up.SetRecorder(resume)
 	result, err := up.InitMultipartUpload(&InitMultipartUploadConfig{
 		Path:          path,
 		PartSize:      DefaultPartSize,

@@ -11,7 +11,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -234,8 +233,16 @@ func parseBodyToFileInfos(b []byte) (iter string, fInfos []*FileInfo, err error)
 	return
 }
 
-func isRecordExpired(fileinfo os.FileInfo, breakpoint *BreakPointConfig) bool {
-	return fileinfo.ModTime() != breakpoint.FileModTime ||
-		breakpoint.LastTime.Add(24*time.Hour).Before(time.Now()) ||
-		breakpoint.FileSize != fileinfo.Size()
+func min(x, y int64) int64 {
+	if x < y {
+		return x
+	}
+	return y
+}
+
+func max(x, y int64) int64 {
+	if x > y {
+		return x
+	}
+	return y
 }

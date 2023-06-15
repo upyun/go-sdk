@@ -55,7 +55,6 @@ Table of Contents
             * [CopyObjectConfig](#copyobjectconfig)
             * [FormUploadConfig](#formuploadconfig)
             * [CommitTasksConfig](#committasksconfig)
-            * [BreakPointConfig](#breakpointconfig)
             * [LiveauditCreateTask](#liveauditcreatetask)
             * [LiveauditCancelTask](#liveauditcanceltask)
             * [SyncCommonTask](#synccommontask)
@@ -90,10 +89,6 @@ func main() {
         LocalPath: "/tmp/upload",
     }))
 
-    // 断点续传 文件大于 10M 才会分片
-    resume := &MemoryRecorder{}
-    // 若设置为 nil，则为正常的分片上传
-    up.SetRecorder(resume)
     fmt.Println(up.Put(&upyun.PutObjectConfig{
         Path:      "/demo.log",
         LocalPath: "/tmp/upload",
@@ -303,19 +298,39 @@ type PutObjectConfig struct {
         Reader            io.Reader             // 待上传的内容
         Headers           map[string]string     // 额外的 HTTP 请求头
         UseMD5            bool                  // 是否需要 MD5 校验
-        UseResumeUpload   bool                  // 是否使用断点续传
-        AppendContent     bool                  // 是否需要追加文件内容
-        ResumePartSize    int64                 // 断点续传块大小
-        MaxResumePutTries int                   // 断点续传最大重试次数
+	MultipartUpload   bool                  // 开启自动分片上传，
+	MultipartUploadWorkers int              // 分片上传的线程数，只有开启分片上传时，才有效
+	MultipartUploadCheckpoint bool          // 分片上传时，开启断点续传
+	OnProgress func(fsize, offset, increase int64) // 分片上传进度变化时 会被调用
 }
 ```
 
 `PutObjectConfig` 提供上传单个文件所需的参数。有几点需要注意:
 - `LocalPath` 跟 `Reader` 是互斥的关系，如果设置了 `LocalPath`，SDK 就会去读取这个文件，而忽略 `Reader` 中的内容。
 - 如果 `Reader` 是一个流／缓冲等的话，需要通过 `Headers` 参数设置 `Content-Length`，SDK 默认会对 `*os.File` 增加该字段。
-- [断点续传](https://docs.upyun.com/api/rest_api/#_3)的上传内容类型必须是 `*os.File`, 断点续传会将文件按照 `ResumePartSize` 进行切割，然后按次序一块一块上传，如果遇到网络问题，会进行重试，重试 `MaxResumePutTries` 次，默认无限重试。
-- `AppendContent` 如果是追加文件的话，确保非最后的分片必须为 1M 的整数倍。
-- 如果需要 MD5 校验，SDK 对 `*os.File` 会自动计算 MD5 值，其他类型需要自行通过 `Headers` 参数设置 `Content-MD5`。
+- [断点续传](https://docs.upyun.com/api/rest_api/#_3)的上传内容类型必须是 `*os.File`, 断点续传会将文件进行切割，然后按次序一块一块上传，如果遇到网络问题，会进行重试。
+- 如果需要 MD5 校验，SDK 对 `*os.File` 会自动计算 MD5 值，其他类型需要自行通过 `Headers` 参数设置 `Content-MD5`， 开启多线程上传时，无法校验 MD5。
+
+
+获取上传进度
+```GO
+config := &PutObjectConfig{
+        Path:                   path,
+        LocalPath:              fname,
+        UseMD5:                 false,
+        Headers:                make(map[string]string),
+        MultipartUpload:        true,
+        MultipartUploadWorkers: 2,
+        MultipartUploadCheckpoint: true,
+}
+
+var count int64
+config.OnProgress = func(fsize, offset, increase int64) {
+        atomic.AddInt64(&count, increase)
+        fmt.Printf("当前进度 %d%\n", count*100/(fsize-offset))
+}
+
+```
 
 
 #### GetObjectConfig
@@ -438,22 +453,6 @@ type CommitTasksConfig struct {
 ```
 
 `CommitTasksConfig` 提供提交异步任务所需的参数。`Accept` 跟 `Source` 仅与异步音视频处理有关。`Tasks` 是一个任务数组，数组中的每一个元素都是任务相关的参数（一般情况下为字典类型）。
-
-
-#### BreakPointConfig
-
-```go
-type BreakPointConfig struct {
-        UploadID    string
-        PartID      int  // 失败待上传的 PartID
-        PartSize    int64
-        FileSize    int64
-        FileModTime time.Time
-        LastTime    time.Time  
-}
-```
-
-`BreakPointConfig` 提供续传所需的参数，在使用 `Put` 进行断点续传时，首先使用 `UpYun` 的`SetRecorder` 传入一个 `Recorder` 接口类型（内部使用 `MemoryRecorder` 实现了该接口），当出现上传失败的时候，调用 `UpYun` 下的 `Recorder` 的 `Get` 方法，即可获取当前断点的相关信息。
 
 #### LiveauditCreateTask
 
