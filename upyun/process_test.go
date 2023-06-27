@@ -30,7 +30,6 @@ func TestSpider(t *testing.T) {
 		NotifyUrl: NOTIFY_URL,
 		Tasks:     []interface{}{task},
 	})
-
 	Nil(t, err)
 	Equal(t, len(ids), 1)
 }
@@ -69,7 +68,7 @@ func TestNagaResult(t *testing.T) {
 	Equal(t, len(res), 2)
 }
 
-//由于是异步操作，不能确保文件已存在
+// 由于是异步操作，不能确保文件已存在
 func TestImgaudit(t *testing.T) {
 	task := map[string]interface{}{
 		"url":     JPG_URL,
@@ -99,7 +98,7 @@ func TestImgaudit(t *testing.T) {
 
 }
 
-//由于是异步操作，不能确保文件已存在
+// 由于是异步操作，不能确保文件已存在
 func TestVideoaudit(t *testing.T) {
 	task := map[string]interface{}{
 		"url":     MP4_URL,

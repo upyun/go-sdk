@@ -76,3 +76,15 @@ func errorOperation(op string, err error) error {
 	}
 	return fmt.Errorf("%s: %w", op, err)
 }
+
+// 分片重复上传错误
+func IsDuplicatePart(err error) bool {
+	if err != nil {
+		return false
+	}
+
+	if e, ok := err.(*Error); ok && e.Code == 40011061 {
+		return true
+	}
+	return false
+}
