@@ -79,6 +79,8 @@ type GetRequestConfig struct {
 	Headers map[string]string
 }
 
+type ProxyReader func(size, offset int64, r io.Reader) io.Reader
+
 // PutObjectConfig provides a configuration to Put method.
 type PutObjectConfig struct {
 	Path            string
@@ -91,6 +93,7 @@ type PutObjectConfig struct {
 	// AppendContent     bool
 	ResumePartSize    int64
 	MaxResumePutTries int
+	ProxyReader       ProxyReader
 }
 
 type MoveObjectConfig struct {
@@ -278,6 +281,34 @@ func getPartInfo(partSize, fsize int64) (int64, int64, error) {
 	return partSize, partNum, nil
 }
 
+func (up *UpYun) getMultipartUploadProcess(config *PutObjectConfig, fsize int64) (*ResumeProcessResult, error) {
+	resumeProcessResult, _ := up.GetResumeProcess(config.Path)
+	if resumeProcessResult != nil {
+		if resumeProcessResult.Order {
+			return resumeProcessResult, nil
+		}
+	}
+
+	initMultipartUploadConfig := &InitMultipartUploadConfig{
+		Path:          config.Path,
+		ContentLength: fsize,
+		PartSize:      config.ResumePartSize,
+		ContentType:   config.Headers["Content-Type"],
+		OrderUpload:   true,
+	}
+	initMultipartUploadResult, err := up.InitMultipartUpload(initMultipartUploadConfig)
+	if err != nil {
+		return nil, err
+	}
+	return &ResumeProcessResult{
+		UploadID:     initMultipartUploadResult.UploadID,
+		Path:         initMultipartUploadConfig.Path,
+		NextPartID:   0,
+		NextPartSize: config.ResumePartSize,
+		Parts:        make([]*DisorderPart, 0),
+	}, nil
+}
+
 func (up *UpYun) resumePut(config *PutObjectConfig) error {
 	f, ok := config.Reader.(*os.File)
 	if !ok {
@@ -301,7 +332,6 @@ func (up *UpYun) resumePut(config *PutObjectConfig) error {
 	if config.Headers == nil {
 		config.Headers = make(map[string]string)
 	}
-	headers := config.Headers
 
 	var breakpoint *BreakPointConfig
 	if up.Recorder != nil {
@@ -310,23 +340,16 @@ func (up *UpYun) resumePut(config *PutObjectConfig) error {
 	// first upload or file has expired
 	maxPartID := int((fsize+config.ResumePartSize-1)/config.ResumePartSize - 1)
 
-	var uploadInfo *InitMultipartUploadResult
 	if breakpoint == nil || isRecordExpired(fileinfo, breakpoint) {
-		uploadInfo, err = up.InitMultipartUpload(&InitMultipartUploadConfig{
-			Path:          config.Path,
-			PartSize:      config.ResumePartSize,
-			ContentType:   headers["Content-Type"],
-			ContentLength: fsize,
-			OrderUpload:   true,
-		})
+		uploadProcess, err := up.getMultipartUploadProcess(config, fsize)
 		if err != nil {
 			return err
 		}
 
 		breakpoint = &BreakPointConfig{
-			UploadID: uploadInfo.UploadID,
-			PartSize: uploadInfo.PartSize,
-			PartID:   0,
+			UploadID: uploadProcess.UploadID,
+			PartSize: uploadProcess.NextPartSize,
+			PartID:   int(uploadProcess.NextPartID),
 		}
 
 		if up.Recorder != nil {
@@ -588,6 +611,21 @@ func (up *UpYun) GetRequest(config *GetRequestConfig) (*http.Response, error) {
 	}
 
 	return resp, nil
+}
+
+func (up *UpYun) GetInfoWithHeaders(path string, headers map[string]string) (*FileInfo, error) {
+	resp, err := up.doRESTRequest(&restReqConfig{
+		method:    "HEAD",
+		uri:       path,
+		headers:   headers,
+		closeBody: true,
+	})
+	if err != nil {
+		return nil, errorOperation("get info", err)
+	}
+	fInfo := parseHeaderToFileInfo(resp.Header, true)
+	fInfo.Name = path
+	return fInfo, nil
 }
 
 func (up *UpYun) GetInfo(path string) (*FileInfo, error) {
@@ -876,21 +914,21 @@ type BreakPointConfig struct {
 	LastTime    time.Time
 }
 
-func (up *UpYun) resumeUploadPart(config *PutObjectConfig, breakpoint *BreakPointConfig, f *os.File, fileInfo fs.FileInfo) (*BreakPointConfig, error) {
+func (up *UpYun) resumeUploadPart(config *PutObjectConfig, breakpoint *BreakPointConfig, f io.Reader, fileInfo fs.FileInfo) (*BreakPointConfig, error) {
 	fsize := fileInfo.Size()
-	maxPartID := int((fsize+config.ResumePartSize-1)/config.ResumePartSize - 1)
 	partID := breakpoint.PartID
 	curSize, partSize := int64(partID)*breakpoint.PartSize, breakpoint.PartSize
-
-	for id := partID; id <= maxPartID; id++ {
-		if curSize+partSize > fsize {
-			partSize = fsize - curSize
-		}
-		fragFile, err := newFragmentFile(f, curSize, partSize)
-		if err != nil {
-			return breakpoint, errorOperation("new fragment file", err)
-		}
-
+	bytesLeft := fsize - curSize
+	ch := make(chan *Chunk, 1)
+	var err error
+	var reader io.Reader
+	if config.ProxyReader != nil {
+		reader = config.ProxyReader(fsize, curSize, f)
+	} else {
+		reader = f
+	}
+	go GetReadChunk(reader, bytesLeft, partSize, ch)
+	for chunk := range ch {
 		try := 0
 		for ; config.MaxResumePutTries == 0 || try < config.MaxResumePutTries; try++ {
 			err = up.UploadPart(
@@ -900,9 +938,9 @@ func (up *UpYun) resumeUploadPart(config *PutObjectConfig, breakpoint *BreakPoin
 					PartSize: breakpoint.PartSize,
 				},
 				&UploadPartConfig{
-					PartID:   id,
-					PartSize: partSize,
-					Reader:   fragFile,
+					PartID:   partID + chunk.ID(),
+					PartSize: int64(chunk.Len()),
+					Reader:   chunk,
 				})
 			if err == nil {
 				break
@@ -910,18 +948,16 @@ func (up *UpYun) resumeUploadPart(config *PutObjectConfig, breakpoint *BreakPoin
 		}
 
 		if config.MaxResumePutTries > 0 && try == config.MaxResumePutTries {
-			breakpoint.PartID = id
+			breakpoint.PartID = partID + chunk.ID()
 			breakpoint.FileSize = fsize
 			breakpoint.LastTime = time.Now()
 			breakpoint.FileModTime = fileInfo.ModTime()
-
 			if up.Recorder != nil {
 				up.Recorder.Set(config.Path, breakpoint)
 			}
 			return breakpoint, err
 		}
-		curSize += partSize
-		breakpoint.PartID = id + 1
+		breakpoint.PartID = partID + chunk.ID() + 1
 	}
 	return breakpoint, nil
 }
@@ -940,6 +976,7 @@ type ResumeDisorderResult struct {
 type ResumeProcessResult struct {
 	UploadID     string
 	Path         string
+	Order        bool
 	NextPartSize int64
 	NextPartID   int64
 	Parts        []*DisorderPart
@@ -965,6 +1002,11 @@ func (up *UpYun) GetResumeProcess(path string) (*ResumeProcessResult, error) {
 	partSizeStr := resp.Header.Get("X-Upyun-Next-Part-Size")
 	partIDStr := resp.Header.Get("X-Upyun-Next-Part-Id")
 	uploadID := resp.Header.Get("X-Upyun-Multi-Uuid")
+	order := resp.Header.Get("X-Upyun-Meta-Order")
+	o := true
+	if order == "false" {
+		o = false
+	}
 
 	if partSizeStr != "" {
 		partSize, err = strconv.ParseInt(partSizeStr, 10, 64)
@@ -995,6 +1037,7 @@ func (up *UpYun) GetResumeProcess(path string) (*ResumeProcessResult, error) {
 		NextPartSize: partSize,
 		NextPartID:   partID,
 		Path:         path,
+		Order:        o,
 		Parts:        disorderRes.Parts,
 	}, nil
 }
