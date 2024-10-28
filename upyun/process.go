@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"path"
 	"strings"
@@ -131,7 +131,7 @@ func (up *UpYun) doProcessRequest(method, uri string,
 		return errorOperation("process", err)
 	}
 
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	resp.Body.Close()
 	if err != nil {
 		return errorOperation("process read body", err)
@@ -215,7 +215,7 @@ func (up *UpYun) doSyncProcessRequest(method, uri string, payload string) (map[s
 		return nil, errorOperation("sync process", err)
 	}
 
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	resp.Body.Close()
 	if err != nil {
 		return nil, err

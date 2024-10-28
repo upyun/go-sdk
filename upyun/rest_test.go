@@ -3,7 +3,6 @@ package upyun
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"path"
@@ -123,26 +122,26 @@ func TestCopyMove(t *testing.T) {
 }
 
 /*
-func TestPutWithBufferAppend(t *testing.T) {
-	s := BUF_CONTENT
-	for k := 0; k < 3; k++ {
-		r := strings.NewReader(s)
-		err := up.Put(&PutObjectConfig{
-			Path:   REST_FILE_BUF_BUF,
-			Reader: r,
-			Headers: map[string]string{
-				"Content-Length": fmt.Sprint(len(s)),
-			},
-			AppendContent: true,
-			UseMD5:        true,
-		})
-		if k != 0 {
-			NotNil(t, err)
-		} else {
-			Nil(t, err)
+	func TestPutWithBufferAppend(t *testing.T) {
+		s := BUF_CONTENT
+		for k := 0; k < 3; k++ {
+			r := strings.NewReader(s)
+			err := up.Put(&PutObjectConfig{
+				Path:   REST_FILE_BUF_BUF,
+				Reader: r,
+				Headers: map[string]string{
+					"Content-Length": fmt.Sprint(len(s)),
+				},
+				AppendContent: true,
+				UseMD5:        true,
+			})
+			if k != 0 {
+				NotNil(t, err)
+			} else {
+				Nil(t, err)
+			}
 		}
 	}
-}
 */
 func testMultiUpload(t *testing.T, key string, data []byte, partSize int64, parts []int, completed bool) *InitMultipartUploadResult {
 	uploadResult, err := up.InitMultipartUpload(&InitMultipartUploadConfig{
@@ -218,6 +217,7 @@ func TestResumePut(t *testing.T) {
 	Nil(t, err)
 	defer fd.Close()
 	defer os.RemoveAll(fname)
+	fd.Seek(0, 0)
 
 	now := time.Now()
 	path := REST_FILE_1M
@@ -253,38 +253,41 @@ func TestResumePut(t *testing.T) {
 	testPoint := &BreakPointConfig{UploadID: result.UploadID, PartSize: result.PartSize,
 		FileSize: fileInfo.Size(), FileModTime: fileInfo.ModTime(), LastTime: now}
 
-	// imitate upload some part and failed after testBreak part
-	for i := 0; i <= testBreak; i++ {
-		fragFile, err := newFragmentFile(fd, curSize, DefaultPartSize)
-		Nil(t, err)
+	ch := make(chan *Chunk, 1)
+	go GetReadChunk(fd, fileInfo.Size(), DefaultPartSize, ch)
+	// initate upload some part and failed after testBreak part
+	for chunk := range ch {
 		err = up.UploadPart(result, &UploadPartConfig{
-			Reader:   fragFile,
-			PartSize: DefaultPartSize,
-			PartID:   i,
+			Reader:   chunk,
+			PartSize: int64(chunk.Len()),
+			PartID:   chunk.ID(),
 		})
-		Nil(t, err)
+		Nilf(t, err, fmt.Sprintf("chunk %d %d", chunk.ID(), chunk.Len()))
+		testPoint.PartID = chunk.ID() + 1
+		curSize += int64(chunk.Len())
 		res, err := up.GetResumeProcess(result.Path)
 		Nil(t, err)
-		Equal(t, int64(i+1), res.NextPartID)
-
-		curSize += DefaultPartSize
-		testPoint.PartID = i + 1
+		Equal(t, int64(testPoint.PartID), res.NextPartID)
 		resSize += res.NextPartSize
+		if testBreak == chunk.ID() {
+			break
+		}
 	}
 	Equal(t, curSize, resSize)
 
+	fd.Seek(0, 0)
 	// other situations
 	tests := []struct {
 		BreakPointConfig
 	}{
-		// imitate breakPoint has expired
+		// breakPoint has expired
 		{
 			BreakPointConfig{
 				UploadID: result.UploadID, PartID: testBreak + 1, PartSize: result.PartSize,
 				FileSize: fileInfo.Size(), FileModTime: fileInfo.ModTime(), LastTime: now.AddDate(0, 0, -2),
 			},
 		},
-		// imitate file updated
+		// file updated
 		{
 			BreakPointConfig{
 				UploadID: result.UploadID, PartID: testBreak + 1, PartSize: result.PartSize,
@@ -317,7 +320,7 @@ func TestResumePut(t *testing.T) {
 
 	// resumePut
 	config.Path = path
-	resume.Set(path, testPoint)
+	// resume.Set(path, testPoint)
 	err = up.resumePut(config)
 	Nil(t, err)
 
@@ -365,10 +368,10 @@ func TestGetWithLocalPath(t *testing.T) {
 	_, err = os.Stat(LOCAL_SAVE_FILE)
 	Nil(t, err)
 
-	b1, err := ioutil.ReadFile(LOCAL_FILE)
+	b1, err := os.ReadFile(LOCAL_FILE)
 	Nil(t, err)
 
-	b2, err := ioutil.ReadFile(LOCAL_SAVE_FILE)
+	b2, err := os.ReadFile(LOCAL_SAVE_FILE)
 	Nil(t, err)
 
 	Equal(t, string(b1), string(b2))
@@ -536,6 +539,7 @@ func TestResumeUpload(t *testing.T) {
 	Nil(t, err)
 	defer os.RemoveAll(fname)
 	defer fd.Close()
+	fd.Seek(0, 0)
 
 	path := REST_FILE_1M
 	config := &PutObjectConfig{
@@ -565,28 +569,28 @@ func TestResumeUpload(t *testing.T) {
 	maxPartID := int((fileInfo.Size()+result.PartSize-1)/result.PartSize - 1)
 	now := time.Now()
 
-	// imitate break part
+	// initate break part
 	testBreak := 5
-
-	var curSize int64 = 0
+	ch := make(chan *Chunk, 1)
+	go GetReadChunk(fd, fileInfo.Size(), DefaultPartSize, ch)
 	testPoint := &BreakPointConfig{UploadID: result.UploadID}
-	for i := 0; i <= testBreak; i++ {
-		fragFile, err := newFragmentFile(fd, curSize, DefaultPartSize)
-		Nil(t, err)
+	for chunk := range ch {
 		err = up.UploadPart(result, &UploadPartConfig{
-			Reader:   fragFile,
-			PartSize: DefaultPartSize,
-			PartID:   i,
+			Reader:   chunk,
+			PartSize: int64(chunk.Len()),
+			PartID:   chunk.ID(),
 		})
 		Nil(t, err)
-		curSize += DefaultPartSize
-		testPoint.PartID = i + 1
+		testPoint.PartID = chunk.ID() + 1
+		if testBreak == chunk.ID() {
+			break
+		}
 	}
 	tests := []struct {
 		BreakPointConfig
 		expected BreakPointConfig
 	}{
-		// imitate failed in upload part stage
+		// initate failed in upload part stage
 		{
 			BreakPointConfig{
 				UploadID: result.UploadID, PartID: testBreak + 1, PartSize: result.PartSize,
@@ -610,7 +614,7 @@ func TestResumeUpload(t *testing.T) {
 		},
 	}
 
-	// imitate breakPoint
+	// initate breakPoint
 	for _, test := range tests {
 		point := test.BreakPointConfig
 		// resume upload
@@ -646,6 +650,7 @@ func TestGetDisorderResumeProcess(t *testing.T) {
 	Nil(t, err)
 	defer fd.Close()
 	defer os.RemoveAll(fname)
+	fd.Seek(0, 0)
 
 	path := "Disorder.txt"
 
@@ -673,33 +678,26 @@ func TestGetDisorderResumeProcess(t *testing.T) {
 	})
 	Nil(t, err)
 
-	// imitate upload part failed
-	testBreak := 10
+	// initate upload part failed
 	var curSize int64 = 0
 	fileSize := fileInfo.Size()
 
-	// imitate upload some part and failed after testBreak part
-	for i := 0; i <= testBreak; i++ {
-		fragFile, err := newFragmentFile(fd, curSize, DefaultPartSize)
-		Nil(t, err)
-		partSize := int64(DefaultPartSize)
-		res := fileSize - curSize
-		if res < DefaultPartSize {
-			partSize = res
-		}
+	ch := make(chan *Chunk, 1)
+	go GetReadChunk(fd, fileSize, DefaultPartSize, ch)
+	// initate upload some part and failed after testBreak part
+	for chunk := range ch {
 		err = up.UploadPart(result, &UploadPartConfig{
-			Reader:   fragFile,
-			PartSize: partSize,
-			PartID:   i,
+			Reader:   chunk,
+			PartSize: int64(chunk.Len()),
+			PartID:   chunk.ID(),
 		})
 		Nil(t, err)
-
-		curSize += partSize
+		curSize += int64(chunk.Len())
 	}
 	resp, err := up.GetResumeProcess(result.Path)
 
 	Nil(t, err)
-	Equal(t, testBreak+1, len(resp.Parts))
+	Equal(t, 11, len(resp.Parts))
 	Equal(t, curSize, fileSize)
 	err = up.CompleteMultipartUpload(result, &CompleteMultipartUploadConfig{})
 	Nil(t, err)

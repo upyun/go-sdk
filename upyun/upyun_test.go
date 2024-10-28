@@ -25,6 +25,7 @@ var up = NewUpYun(&UpYunConfig{
 	Operator: os.Getenv("UPYUN_USERNAME"),
 	Password: os.Getenv("UPYUN_PASSWORD"),
 	Secret:   os.Getenv("UPYUN_SECRET"),
+	UseHTTP:  os.Getenv("UPYUN_USEHTTP") == "true",
 })
 
 func MakeTmpPath() string {
@@ -62,6 +63,15 @@ func NotEqual(t *testing.T, actual, expected interface{}) {
 		_, file, line, _ := runtime.Caller(1)
 		t.Logf("\033[31m%s:%d:\n\n\tnexp: %#v\n\n\tgot:  %#v\033[39m\n\n",
 			filepath.Base(file), line, expected, actual)
+		t.FailNow()
+	}
+}
+
+func Nilf(t *testing.T, object interface{}, msg string) {
+	if !isNil(object) {
+		_, file, line, _ := runtime.Caller(1)
+		t.Logf("\033[31m%s:%d:\n\n\t   <nil> (expected)\n\n\t!= %+v (actual)\033[39m\n%s\n",
+			filepath.Base(file), line, object, msg)
 		t.FailNow()
 	}
 }
