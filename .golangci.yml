@@ -22,13 +22,12 @@ linters:
     - gosimple
     - govet
     - ineffassign
-    - interfacer
+    # - interfacer
     - misspell
-#    - nakedret
     - nolintlint
-    - scopelint
+    # - scopelint
     - staticcheck
-    - structcheck
+    # - structcheck
     - typecheck
     - unconvert
     - unparam
