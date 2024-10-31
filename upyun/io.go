@@ -1,78 +1,63 @@
 package upyun
 
 import (
+	"bytes"
+	"crypto/md5"
 	"fmt"
 	"io"
-	"os"
 )
 
 type UpYunPutReader interface {
 	Len() (n int)
 	MD5() (ret string)
 	Read([]byte) (n int, err error)
-	Copyed() (n int)
 }
 
-type fragmentFile struct {
-	realFile *os.File
-	offset   int64
-	limit    int64
-	cursor   int64
+type Chunk struct {
+	buf  io.Reader
+	buf2 *bytes.Buffer
+	id   int
+	n    int
 }
 
-func (f *fragmentFile) Seek(offset int64, whence int) (ret int64, err error) {
-	switch whence {
-	case 0:
-		f.cursor = offset
-		ret, err = f.realFile.Seek(f.offset+f.cursor, 0)
-		return ret - f.offset, err
-	default:
-		return 0, fmt.Errorf("whence must be 0")
+func (c *Chunk) Read(b []byte) (n int, err error) {
+	if c.buf2 != nil {
+		return c.buf2.Read(b)
 	}
+	return c.buf.Read(b)
 }
 
-func (f *fragmentFile) Read(b []byte) (n int, err error) {
-	if f.cursor >= f.limit {
-		return 0, io.EOF
+func (c *Chunk) Len() int {
+	return c.n
+}
+func (c *Chunk) ID() int {
+	return c.id
+}
+
+func (c *Chunk) MD5() string {
+	c.buf2 = bytes.NewBuffer(nil)
+	reader := io.TeeReader(c.buf, c.buf2)
+	hash := md5.New()
+	_, _ = io.Copy(hash, reader)
+	return fmt.Sprintf("%x", hash.Sum(nil))
+}
+
+func GetReadChunk(input io.Reader, size, partSize int64, ch chan *Chunk) {
+	id := 0
+	bytesLeft := size
+	for bytesLeft > 0 {
+		n := partSize
+		if bytesLeft <= partSize {
+			n = bytesLeft
+		}
+		reader := io.LimitReader(input, n)
+		ch <- &Chunk{
+			buf: reader,
+			id:  id,
+			n:   int(n),
+		}
+		id++
+		bytesLeft -= n
 	}
-	n, err = f.realFile.Read(b)
-	if f.cursor+int64(n) > f.limit {
-		n = int(f.limit - f.cursor)
-	}
-	f.cursor += int64(n)
-	return n, err
-}
-
-func (f *fragmentFile) Stat() (fInfo os.FileInfo, err error) {
-	return fInfo, fmt.Errorf("fragmentFile not implement Stat()")
-}
-
-func (f *fragmentFile) Close() error {
-	return nil
-}
-
-func (f *fragmentFile) Copyed() int {
-	return int(f.cursor - f.offset)
-}
-
-func (f *fragmentFile) Len() int {
-	return int(f.limit - f.offset)
-}
-
-func (f *fragmentFile) MD5() string {
-	s, _ := md5File(f)
-	return s
-}
-
-func newFragmentFile(file *os.File, offset, limit int64) (*fragmentFile, error) {
-	f := &fragmentFile{
-		realFile: file,
-		offset:   offset,
-		limit:    limit,
-	}
-
-	if _, err := f.Seek(0, 0); err != nil {
-		return nil, err
-	}
-	return f, nil
+	close(ch)
 }

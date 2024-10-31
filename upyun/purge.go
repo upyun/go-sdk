@@ -2,7 +2,7 @@ package upyun
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	URL "net/url"
 	"strings"
 	"time"
@@ -33,7 +33,7 @@ func (up *UpYun) Purge(urls []string) (fails []string, err error) {
 	}
 	defer resp.Body.Close()
 
-	content, err := ioutil.ReadAll(resp.Body)
+	content, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fails, errorOperation("purge read body", err)
 	}

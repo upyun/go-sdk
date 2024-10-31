@@ -13,7 +13,7 @@ jobs:
         uses: golangci/golangci-lint-action@v3
         with:
           # Optional: golangci-lint command line arguments.
-          version: v1.47.3
+          version: latest
           args:
           # Optional: working directory, useful for monorepos
           # working-directory: somedir

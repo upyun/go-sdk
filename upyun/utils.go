@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -143,7 +142,7 @@ func unescapeUri(s string) string {
 	return string(t)
 }
 
-var readHTTPBody = ioutil.ReadAll
+var readHTTPBody = io.ReadAll
 
 func readHTTPBodyToStr(resp *http.Response) (string, error) {
 	b, err := readHTTPBody(resp.Body)

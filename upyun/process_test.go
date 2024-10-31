@@ -2,7 +2,7 @@ package upyun
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"path"
 	"testing"
@@ -69,7 +69,7 @@ func TestNagaResult(t *testing.T) {
 	Equal(t, len(res), 2)
 }
 
-//由于是异步操作，不能确保文件已存在
+// 由于是异步操作，不能确保文件已存在
 func TestImgaudit(t *testing.T) {
 	task := map[string]interface{}{
 		"url":     JPG_URL,
@@ -99,7 +99,7 @@ func TestImgaudit(t *testing.T) {
 
 }
 
-//由于是异步操作，不能确保文件已存在
+// 由于是异步操作，不能确保文件已存在
 func TestVideoaudit(t *testing.T) {
 	task := map[string]interface{}{
 		"url":     MP4_URL,
@@ -156,7 +156,7 @@ func TestFaceDetect(t *testing.T) {
 	resp, err := http.Get(FACE_URL + "!/face/detection")
 	Nil(t, err)
 	defer resp.Body.Close()
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	Nil(t, err)
 	if err != nil {
 		var result map[string]interface{}
