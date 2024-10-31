@@ -248,12 +248,17 @@ func (up *UpYun) put(config *PutObjectConfig) error {
 		config.Headers["X-Upyun-Append"] = "true"
 	}
 	*/
+
+	reader := config.Reader
+	if config.ProxyReader != nil {
+		reader = config.ProxyReader(0, config.Reader)
+	}
 	_, err := up.doRESTRequest(&restReqConfig{
 		method:    "PUT",
 		uri:       config.Path,
 		headers:   config.Headers,
 		closeBody: true,
-		httpBody:  config.Reader,
+		httpBody:  reader,
 		useMD5:    config.UseMD5,
 	})
 	if err != nil {
